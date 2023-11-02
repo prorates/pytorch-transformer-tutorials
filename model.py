@@ -163,10 +163,9 @@ class MultiHeadAttentionBlock(nn.Module):
         # mask avoid that some word interact with some other workds
         # we need to put a value very small to the matrix before we apply
         # the soft max. e to the power of infinity will be very small.
-        # (Batch, Seq_Len, d_mmodel) --> (Batch, Seq_Len, d_model)
-        query = self.w_q(q)
-        key = self.w_k(k)
-        value = self.w_v(v)
+        query = self.w_q(q) # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+        key = self.w_k(k) # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+        value = self.w_v(v) # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
 
         # Batch dimension is preserved, Seuence dimension is preserved,
         # We want the h dimension to be the second dimension hence we invoke the transpose method.
@@ -175,8 +174,7 @@ class MultiHeadAttentionBlock(nn.Module):
         key = key.view(key.shape[0], key.shape[1], self.h, self.d_k).transpose(1, 2)
         value = value.view(value.shape[0], value.shape[1], self.h, self.d_k).transpose(1, 2)
 
-        x, self.attention_scores = MultiHeadAttentionBlock.attention(
-            query, key, value, mask, self.dropout)
+        x, self.attention_scores = MultiHeadAttentionBlock.attention(query, key, value, mask, self.dropout)
 
         # (Batch, h, Seq_Len, d_K) --> (Batch, Sql_Len, h, d_K) -->  (Batch, Seq_Len, d_model
         # Pytorch needs the memory to be continguouos to create a view
@@ -192,7 +190,7 @@ class EncoderBlock(nn.Module):
     def __init__(self, features: int, self_attention_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
         super().__init__()
         self.self_attention_block = self_attention_block
-        self.feed_foward_block = feed_forward_block
+        self.feed_forward_block = feed_forward_block
         self.residual_connections = nn.ModuleList([ResidualConnection(features, dropout) for _ in range(2)])
 
     # src_mask is hiding the padding words
@@ -201,7 +199,7 @@ class EncoderBlock(nn.Module):
         # this invokes the forward function of the MultiHeadAttention
         x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, src_mask))
         # second connection is the feedfoward. No Lambda needed. Why ?
-        x = self.residual_connections[1](x, self.feed_foward_block)
+        x = self.residual_connections[1](x, self.feed_forward_block)
         return x
 
 
@@ -226,7 +224,7 @@ class DecoderBlock(nn.Module):
         super().__init__()
         self.self_attention_block = self_attention_block
         self.cross_attention_block = cross_attention_block
-        self.feed_foward_block = feed_forward_block
+        self.feed_forward_block = feed_forward_block
         self.residual_connections = nn.ModuleList([ResidualConnection(features, dropout) for _ in range(3)])
 
     # src_mask is hiding the padding words
@@ -237,7 +235,7 @@ class DecoderBlock(nn.Module):
         # third connection is the feedfoward. No Lambda needed. Why ?
         x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x, encoder_ouput, encoder_ouput, src_mask))
         # third connection is the feedfoward. No Lambda needed. Why ?
-        x = self.residual_connections[2](x, self.feed_foward_block)
+        x = self.residual_connections[2](x, self.feed_forward_block)
         return x
 
 

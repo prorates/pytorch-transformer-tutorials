@@ -96,11 +96,12 @@ def run_validation(model: Transformer, validation_ds, tokenizer_src: Tokenizer, 
 
             # Print the message to the console without interfering with the progress bar
             print_msg('-'*console_width)
-            print_msg(f'SOURCE: {source_text}')
-            print_msg(f'TARGET: {target_text}')
-            print_msg(f'PREDICTED: {model_out_text}')
+            print_msg(f"{f'SOURCE: ':>12}{source_text}")
+            print_msg(f"{f'TARGET: ':>12}{target_text}")
+            print_msg(f"{f'PREDICTED: ':>12}{model_out_text}")
 
             if count == num_examples:
+                print_msg('-'*console_width)
                 break
     if writer:
         # Evaluate the character error rate
@@ -154,10 +155,8 @@ def get_ds(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tok
     val_ds_size = len(ds_raw) - train_ds_size
     train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
 
-    train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt,
-                                config['lang_src'], config['lang_tgt'], config['seq_len'])
-    val_ds = BilingualDataset(val_ds_raw, tokenizer_src, tokenizer_tgt,
-                              config['lang_src'], config['lang_tgt'], config['seq_len'])
+    train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
+    val_ds = BilingualDataset(val_ds_raw, tokenizer_src, tokenizer_tgt, config['lang_src'], config['lang_tgt'], config['seq_len'])
 
     max_len_src = 0
     max_len_tgt = 0
@@ -214,9 +213,12 @@ def train_model(config: dict):
     if model_filename:
         print(f'Preloading model {model_filename}')
         state = torch.load(model_filename)
+        model.load_state_dict(state['model_state_dict']) # JEB: This was not in the video
         initial_epoch = state['epoch'] + 1
         optimizer.load_state_dict(state['optimizer_state_dict'])
         global_step = state['global_step']
+    else:
+        print('No model to preload, starting from scratch')
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('[PAD]'), label_smoothing=0.1).to(device)
 
@@ -238,11 +240,10 @@ def train_model(config: dict):
 
             # Run the tensors through the transformer
             encoder_output = model.encode(encoder_input, encoder_mask)  # (B, SeqLen, d_model)
-            decoder_output = model.decode(encoder_output, encoder_mask, decoder_input,
-                                          decoder_mask)  # (B, SeqLen, d_model)
-            # (B, SeqLen, tgt_vocab_size)
-            proj_output = model.project(decoder_output)
+            decoder_output = model.decode(encoder_output, encoder_mask, decoder_input, decoder_mask)  # (B, SeqLen, d_model)
+            proj_output = model.project(decoder_output) # (B, SeqLen, tgt_vocab_size)
 
+            # Compare the output with the label
             label = batch['label'].to(device)  # (B, SeqLen)
 
             # (B, SeqLen, tgt_vocab_size) --> (B * SeqLen, tgt_vocab_size)
@@ -268,8 +269,7 @@ def train_model(config: dict):
             global_step += 1
 
         # Run validation at the end of each epoch
-        run_validation(model, val_dataloader, tokenizer_src, tokenizer_tgt,
-                       config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+        run_validation(model, val_dataloader, tokenizer_src, tokenizer_tgt, config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Save the model at the end of every epoch
         model_filename = get_weights_file_path(config, f'{epoch:02d}')
