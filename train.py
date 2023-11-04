@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from typing import Tuple
 
 import torch
@@ -18,7 +19,8 @@ from tqdm import tqdm
 from model import Transformer
 from model import build_transformer
 from dataset import BilingualDataset, casual_mask
-from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path
+from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path, get_console_with
+from model2 import Transformer2
 
 import os
 import torchmetrics
@@ -31,6 +33,7 @@ def greedy_decode(model: Transformer, source, source_mask, tokenizer_src: Tokeni
 
     # Precompute the encoder output and reuse it for every step
     encoder_output = model.encode(source, source_mask)
+
     # Initialize the decoder input with the sos token
     # two dimensions. One for batch one for the decoder input
     decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(device)
@@ -53,6 +56,7 @@ def greedy_decode(model: Transformer, source, source_mask, tokenizer_src: Tokeni
             [decoder_input, torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(device)], dim=1
         )
 
+        # break if we predict the end of sentence token
         if next_word == eos_idx:
             break
 
@@ -67,14 +71,7 @@ def run_validation(model: Transformer, validation_ds, tokenizer_src: Tokenizer, 
     expected = []
     predicted = []
 
-    try:
-        # get the console window width
-        with os.popen('stty size', 'r') as console:
-            _, console_width = console.read().split()
-            console_width = int(console_width)
-    except:
-        # If we can't get the console width, use 80 as default
-        console_width = 80
+    console_width = get_console_with()
 
     with torch.no_grad():
         for batch in validation_ds:
@@ -204,7 +201,6 @@ def train_model(config: dict):
     writer = SummaryWriter(get_model_folder(config) + "/" + config['experiment_name'])
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], eps=1e-9)
-    scheduler = StepLR(optimizer, step_size=10, gamma=0.1)
 
     initial_epoch = 0
     global_step = 0
@@ -281,7 +277,95 @@ def train_model(config: dict):
         }, model_filename)
 
 
+def train_model2(config: dict):
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_built() or torch.backends.mps.is_available() else "cpu"
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    if (device == 'cuda'):
+        print(f'Using NVIDIA GPU and device {device}')
+        print(f"Device name: {torch.cuda.get_device_name(device.index)}")
+        print(f"Device memory: {torch.cuda.get_device_properties(device.index).total_memory / 1024 ** 3} GB")
+    elif (device == 'mps'):
+        print(f'Using Apple Silicon and device {device}')
+    else:
+        print(f'Using device {device}')
+
+    model_folder = get_model_folder(config)
+    Path(model_folder).mkdir(parents=True, exist_ok=True)
+
+    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds(config, model_folder)
+    transformer = Transformer2(tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size(), config['d_model'], config['h'], config['N'], config['d_ff'], config['seq_len'], config['dropout']).to(device)
+
+    # Tensorboard
+    writer = SummaryWriter(get_model_folder(config) + "/" + config['experiment_name'])
+
+    optimizer = torch.optim.Adam(transformer.parameters(), lr=config['lr'], betas=(0.9, 0.98), eps=1e-9)
+
+    initial_epoch = 0
+    global_step = 0
+    preload = config['preload']
+    model_filename = latest_weights_file_path(config) if preload == 'latest' else get_weights_file_path(config, preload) if preload else None
+    if model_filename:
+        print(f'Preloading model {model_filename}')
+        state = torch.load(model_filename)
+        transformer.load_state_dict(state['model_state_dict']) # JEB: This was not in the video
+        initial_epoch = state['epoch'] + 1
+        optimizer.load_state_dict(state['optimizer_state_dict'])
+        global_step = state['global_step']
+    else:
+        print('No model to preload, starting from scratch')
+
+    # loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('[PAD]'), label_smoothing=0.1).to(device)
+    criterion = nn.CrossEntropyLoss(ignore_index=0).to(device)
+
+    # Generate random sample data
+    src_data = torch.randint(1, tokenizer_src.get_vocab_size(), (64, config['seq_len'])).to(device)  # (batch_size, seq_length)
+    tgt_data = torch.randint(1, tokenizer_tgt.get_vocab_size(), (64, config['seq_len'])).to(device)  # (batch_size, seq_length)
+
+    for epoch in range(initial_epoch, config['num_epochs']):
+        if (device == 'cuda'):
+            torch.cuda.empty_cache()
+
+        transformer.train()
+        # batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
+        # for batch in batch_iterator:
+        if True:
+            optimizer.zero_grad()
+            nopeakmask = transformer.build_nopeakmask(config['seq_len']-1).to(device)
+            output = transformer(src_data, tgt_data[:, :-1].to(device), nopeakmask)
+            loss = criterion(output.contiguous().view(-1, tokenizer_tgt.get_vocab_size()), tgt_data[:, 1:].contiguous().view(-1))
+            # batch_iterator.set_postfix({"Loss": f"{loss.item():6.3f}"})
+
+            # Log of loss
+            writer.add_scalar('train loss', loss.item(), global_step)
+            writer.flush()
+
+            # backpropagate the loss
+            loss.backward()
+
+            # update the weights
+            optimizer.step()
+
+            global_step += 1
+            print(f"Epoch: {epoch+1}, Loss: {loss.item()}")
+
+        # Save the model at the end of every epoch
+        model_filename = get_weights_file_path(config, f'{epoch:02d}')
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': transformer.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'global_step': global_step
+        }, model_filename)
+
+
+
+
 if __name__ == '__main__':
     # warnings.filterwarnings('ignore')
     config = get_config()
-    train_model(config)
+
+    if "model2" == config['alt_model']:
+        train_model2(config)
+    else:
+        train_model(config)
+

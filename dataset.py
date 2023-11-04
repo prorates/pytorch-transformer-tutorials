@@ -109,3 +109,9 @@ def casual_mask(size: int) -> Tensor:
     # mask = torch.triu(torch.ones(1, size, size), diagonal=1).type(torch.int)
     mask = torch.triu(torch.ones((1, size, size)), diagonal=1).type(torch.int)
     return mask == 0
+
+def translation_mask(size: int) -> Tensor:
+    # Everything above the diagonal needs to become 0
+    # JEB: Translate was not applying the == 0
+    mask = torch.triu(torch.ones((1, size, size)), diagonal=1).type(torch.int)
+    return mask
