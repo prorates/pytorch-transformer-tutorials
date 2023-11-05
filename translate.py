@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 from pathlib import Path
-from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path
-from model import build_transformer
+from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path, get_device
+from model1 import build_transformer1
+from model1 import Transformer1
 from tokenizers import Tokenizer
 from datasets import load_dataset
-from dataset import BilingualDataset, translation_mask
-from model import Transformer
+from dataset1 import Dataset1, translation_mask
 import torch
 import sys
 
 
-def greedy_decode(model: Transformer, source, source_mask, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer, max_len: int, device):
+def greedy_decode(model: Transformer1, source, source_mask, tokenizer_src: Tokenizer,
+                  tokenizer_tgt: Tokenizer, max_len: int, device):
     eos_idx = tokenizer_tgt.token_to_id('[EOS]')
     sos_idx = tokenizer_tgt.token_to_id('[EOS]')
 
@@ -49,7 +50,8 @@ def greedy_decode(model: Transformer, source, source_mask, tokenizer_src: Tokeni
     return decoder_input[0].tolist()
 
 
-def run_translation(label: str, sentence: str, model: Transformer, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer, max_len: int, device):
+def run_translation(label: str, sentence: str, model: Transformer1, tokenizer_src: Tokenizer,
+                    tokenizer_tgt: Tokenizer, max_len: int, device):
     sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64)
     eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
     pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
@@ -91,7 +93,7 @@ def run_translation(label: str, sentence: str, model: Transformer, tokenizer_src
 
 
 def get_tokenizer(config: dict, model_folder: str, lang: str) -> Tokenizer:
-    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang))
+    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
         raise ValueError(f"{tokenizer_path} Tokenizer does not exist")
@@ -99,23 +101,14 @@ def get_tokenizer(config: dict, model_folder: str, lang: str) -> Tokenizer:
         return Tokenizer.from_file(str(tokenizer_path))
 
 
-def get_model(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer:
-    model = build_transformer(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
-                              d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+def get_model(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer1:
+    model = build_transformer1(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
     return model
 
 
 def translate(config: dict, sentence: str):
-    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_built() or torch.backends.mps.is_available() else "cpu"
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    if (device == 'cuda'):
-        print(f'Using NVIDIA GPU and device {device}')
-        print(f"Device name: {torch.cuda.get_device_name(device.index)}")
-        print(f"Device memory: {torch.cuda.get_device_properties(device.index).total_memory / 1024 ** 3} GB")
-    elif (device == 'mps'):
-        print(f'Using Apple Silicon and device {device}')
-    else:
-        print(f'Using device {device}')
+    device = get_device()
 
     model_folder = get_model_folder(config)
     if not Path.exists(Path(model_folder)):
@@ -141,8 +134,8 @@ def translate(config: dict, sentence: str):
     if type(sentence) == int or sentence.isdigit():
         id = int(sentence)
         ds = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='all')
-        ds = BilingualDataset(ds, tokenizer_src, tokenizer_tgt,
-                              config['lang_src'], config['lang_tgt'], config['seq_len'])
+        ds = Dataset1(ds, tokenizer_src, tokenizer_tgt,
+                      config['lang_src'], config['lang_tgt'], config['seq_len'])
         sentence = ds[id]['src_text']
         label = ds[id]["tgt_text"]
 

@@ -4,8 +4,6 @@ import torch.optim as optim
 import torch.utils.data as data
 from torch import Tensor
 import math
-import copy
-
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model: int, num_heads: int):
@@ -29,7 +27,7 @@ class MultiHeadAttention(nn.Module):
             # Replace all the value for which mask == 0 with -1e9 (minus infinity)
             # Some words will not be able to see future words...or padding values
             attn_scores = attn_scores.masked_fill(mask == 0, -1e9)
-        attn_probs = torch.softmax(attn_scores, dim=-1) # (Batch, h, Seq_Len, Seq_Len)
+        attn_probs = torch.softmax(attn_scores, dim=-1)  # (Batch, h, Seq_Len, Seq_Len)
 
         # (batch, h, seq_len, seq_len) --> (batch, h, seq_len, d_k)
         # Unlike model.py we do not return a tupple
@@ -55,8 +53,10 @@ class MultiHeadAttention(nn.Module):
 
 # JEB: This block does have a drouput
 # JEB: Compare to FeedForwardBlock at line 34 in model.py
+
+
 class PositionWiseFeedForward(nn.Module):
-    def __init__(self, d_model: int, d_ff: int ):
+    def __init__(self, d_model: int, d_ff: int):
         super(PositionWiseFeedForward, self).__init__()
         self.fc1 = nn.Linear(d_model, d_ff)
         self.fc2 = nn.Linear(d_ff, d_model)
@@ -105,9 +105,11 @@ class EncoderLayer(nn.Module):
         x = self.norm2(x + self.dropout(ff_output))
         return x
 
-#JEB: This code matches the DecoderBlock at line 221
+# JEB: This code matches the DecoderBlock at line 221
+
+
 class DecoderLayer(nn.Module):
-    def __init__(self, d_model: int, num_heads: int, d_ff:int , dropout: float):
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float):
         super(DecoderLayer, self).__init__()
         self.self_attn = MultiHeadAttention(d_model, num_heads)
         self.cross_attn = MultiHeadAttention(d_model, num_heads)
@@ -132,7 +134,8 @@ class DecoderLayer(nn.Module):
 
 
 class Transformer2(nn.Module):
-    def __init__(self, src_vocab_size: int, tgt_vocab_size: int, d_model: int, num_heads: int, num_layers: int, d_ff, max_seq_length: int, dropout):
+    def __init__(self, src_vocab_size: int, tgt_vocab_size: int, d_model: int,
+                 num_heads: int, num_layers: int, d_ff, max_seq_length: int, dropout):
         super(Transformer2, self).__init__()
         self.encoder_embedding = nn.Embedding(src_vocab_size, d_model)
         self.decoder_embedding = nn.Embedding(tgt_vocab_size, d_model)
@@ -171,3 +174,9 @@ class Transformer2(nn.Module):
 
         output = self.fc(dec_output)
         return output
+
+
+def build_transformer2(src_vocab_size: int, tgt_vocab_size: int, max_seq_len: int, d_model: int = 512,
+                       N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048) -> Transformer2:
+    transformer = Transformer2(src_vocab_size, tgt_vocab_size, d_model, h, N, d_ff, max_seq_len, dropout)
+    return transformer

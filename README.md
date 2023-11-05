@@ -4,10 +4,21 @@
 
 ## Model 1
 
+This is based on the following [video](https://youtu.be/ISNdQcPhsts)
+The code is original code is available [here](https://github.com/hkproj/pytorch-transformer)
 
 ## Model 2
 
+The code was copy pasted from [here](https://towardsdatascience.com/build-your-own-transformer-from-scratch-using-pytorch-84c850470dcb)
+The same code seems available [here](https://www.datacamp.com/tutorial/building-a-transformer-with-py-torch)
 
+## Model 3
+
+The source code seems to be [here](https://github.com/SamLynnEvans/Transformer?ref=blog.floydhub.com)
+
+## Model 4
+
+Builld a GPT from scratch [video][https://youtu.be/kCc8FmEb1nY]
 
 ## Size requirements
 

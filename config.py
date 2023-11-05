@@ -1,34 +1,52 @@
 from pathlib import Path
 import os
+import torch
+
 
 def get_config():
     return {
         "batch_size": 8,
         "num_epochs": 20,
         "lr": 10**-4,
-        "seq_len": 350,
-        "d_model": 256, # paper: 512,
-        "N": 3, # paper: 6,
-        "h": 4, # paper: 8,
+        "seq_len": 80,
+        "d_model": 256,  # paper: 512,
+        "N": 3,  # paper: 6,
+        "h": 4,  # paper: 8,
         "dropout": 10**-1,
-        "d_ff": 1024, # paper 2048,
-        "datasource": 'opus_books',
+        "d_ff": 1024,  # paper 2048,
+        # "datasource": 'opus_books',
+        "datasource": 'translate',
         "lang_src": "en",
-        "lang_tgt": "it",
+        "lang_tgt": "fr",
         "model_basename": "tmodel_",
-        "preload": "latest", # Possible values: None, "02", "latest"
-        "tokenizer_file": "tokenizer_{0}.json",
+        "preload": "latest",  # Possible values: None, "02", "latest"
+        "tokenizer_file": "tokenizer_{0}",
         "experiment_name": "runs/tmodel",
-        "alt_model": None # Possible values: None, model1, model2
+        "alt_model": "model3"  # Possible values: None, model1, model2
     }
 
-def get_console_with():
+
+def get_device():
+    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_built(
+    ) or torch.backends.mps.is_available() else "cpu"
+    if (device == 'cuda'):
+        print(f'Using NVIDIA GPU and device {device}')
+        print(f"Device name: {torch.cuda.get_device_name(device.index)}")
+        print(f"Device memory: {torch.cuda.get_device_properties(device.index).total_memory / 1024 ** 3} GB")
+    elif (device == 'mps'):
+        print(f'Using Apple Silicon and device {device}')
+    else:
+        print(f'Using device {device}')
+    return device
+
+
+def get_console_width():
     try:
         # get the console window width
         with os.popen('stty size', 'r') as console:
             _, console_width = console.read().split()
             console_width = int(console_width)
-    except:
+    except BaseException:
         # If we can't get the console width, use 80 as default
         console_width = 80
     return console_width
