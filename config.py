@@ -27,7 +27,7 @@ def get_config():
         "preload": "latest",  # Possible values: None, "02", "latest"
         "tokenizer_file": "tokenizer_{0}",
         "experiment_name": "runs/tmodel",
-        "alt_model": "model2"  # Possible values: None, model1, model2
+        "alt_model": "model3"  # Possible values: None, model1, model2
     }
 
 

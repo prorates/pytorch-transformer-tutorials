@@ -233,11 +233,11 @@ class DecoderBlock(nn.Module):
     def forward(self, x, encoder_ouput, src_mask, tgt_mask):
         # query, key, value are the same
         # this invokes the forward function of the MultiHeadAttention
+        # x (decoder side) is used for q, k and v
         x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, tgt_mask))
-        # third connection is the feedfoward. No Lambda needed. Why ?
-        x = self.residual_connections[1](
-            x, lambda x: self.cross_attention_block(
-                x, encoder_ouput, encoder_ouput, src_mask))
+        # x (decoder side) is used for q. k and v are coming from encoder side
+        x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x,
+                                         encoder_ouput, encoder_ouput, src_mask))
         # third connection is the feedfoward. No Lambda needed. Why ?
         x = self.residual_connections[2](x, self.feed_forward_block)
         return x

@@ -17,6 +17,7 @@ from tqdm import tqdm
 from dataset1 import get_ds1, casual_mask
 from dataset2 import get_ds2
 from dataset3 import get_ds3
+from dataset6 import get_ds6
 
 from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path
 from config import get_console_width, get_device
@@ -146,9 +147,10 @@ def build_model5(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transf
     return model
 
 
-def build_model6(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer6:
-    model = build_transformer6(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+def build_model6(config: dict, vocab_src_len: int, vocab_tgt_len: int, src_to_index: dict, tgt_to_index: dict) -> Transformer6:
+    model = build_transformer6(vocab_src_len, vocab_tgt_len, src_to_index, tgt_to_index, config['seq_len'], config['seq_len'],
                                d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+
     return model
 
 
@@ -439,6 +441,140 @@ def train_model3(config: dict):
         save_model(model, optimizer, epoch, global_step)
 
 
+def train_model4(config: dict):
+    device = get_device()
+
+    model_folder = get_model_folder(config)
+    Path(model_folder).mkdir(parents=True, exist_ok=True)
+
+    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds3(config, model_folder)
+    model = build_model4(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
+    raise RuntimeError("Training for model4 not implemented")
+
+
+def train_model5(config: dict):
+    device = get_device()
+
+    model_folder = get_model_folder(config)
+    Path(model_folder).mkdir(parents=True, exist_ok=True)
+
+    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds3(config, model_folder)
+    model = build_model5(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
+    raise RuntimeError("Training for model5 not implemented")
+
+
+def train_model6(config: dict):
+    device = get_device()
+
+    model_folder = get_model_folder(config)
+    Path(model_folder).mkdir(parents=True, exist_ok=True)
+
+    tokenizer_src = None
+    tokenizer_tgt = None
+    train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index = get_ds6(
+        config, model_folder)
+    model = build_model6(config, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index).to(device)
+
+    # Tensorboard
+    writer = SummaryWriter(get_model_folder(config) + "/" + config['experiment_name'])
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
+
+    total_loss = 0
+    initial_epoch = 0
+    global_step = 0
+
+    model, initial_epoch, optimizer, global_step = reload_model(config, model, optimizer, initial_epoch, global_step)
+    # loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_tgt.token_to_id(PAD), reduction='none')
+    loss_fn = nn.CrossEntropyLoss(ignore_index=tgt_to_index[PAD], reduction='none')
+
+    for epoch in range(initial_epoch, config['num_epochs']):
+        if (device == 'cuda'):
+            torch.cuda.empty_cache()
+
+        model.train()  # moved inside for run_validation at each step
+        batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
+        for batch in batch_iterator:
+
+            # ORG
+            # for epoch in range(num_epochs):
+            #     print(f"Epoch {epoch}")
+            #     iterator = iter(train_loader)
+            #     for batch_num, batch in enumerate(iterator):
+
+            eng_batch, kn_batch = batch
+            encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = create_masks(
+                eng_batch, kn_batch)
+            optimizer.zero_grad()
+            kn_predictions = transformer(eng_batch,
+                                         kn_batch,
+                                         encoder_self_attention_mask.to(device),
+                                         decoder_self_attention_mask.to(device),
+                                         decoder_cross_attention_mask.to(device),
+                                         enc_start_token=False,
+                                         enc_end_token=False,
+                                         dec_start_token=True,
+                                         dec_end_token=True)
+            labels = transformer.decoder.sentence_embedding.batch_tokenize(kn_batch, start_token=False, end_token=True)
+            loss = loss_fn(kn_predictions.view(-1, kn_vocab_size).to(device), labels.view(-1).to(device)).to(device)
+            valid_indicies = torch.where(labels.view(-1) == tgt_to_index[PAD], False, True)
+            loss = loss.sum() / valid_indicies.sum()
+            loss.backward()
+            optimizer.step()
+
+            # train_losses.append(loss.item())
+            # if batch_num % 100 == 0:
+            #     print(f"Iteration {batch_num} : {loss.item()}")
+            #     print(f"English: {eng_batch[0]}")
+            #     print(f"Kannada Translation: {kn_batch[0]}")
+            #     kn_sentence_predicted = torch.argmax(kn_predictions[0], axis=1)
+            #     predicted_sentence = ""
+            #     for idx in kn_sentence_predicted:
+            #         if idx == kannada_to_index[END_TOKEN]:
+            #             break
+            #         predicted_sentence += index_to_kannada[idx.item()]
+            #     print(f"Kannada Prediction: {predicted_sentence}")
+
+        # Run validation at the end of each epoch
+        validate_model6(model, val_dataloader, tokenizer_src, tokenizer_tgt,
+                        config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+
+        # Save the model at the end of every epoch
+        save_model(model, optimizer, epoch, global_step)
+
+
+def validate_model6(transformer: Transformer6, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
+                    max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
+    model.eval()
+    count = 0
+
+    if True:
+        transformer.eval()
+        kn_sentence = ("",)
+        eng_sentence = ("should we go to the mall?",)
+        for word_counter in range(max_sequence_length):
+            encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = create_masks(
+                eng_sentence, kn_sentence)
+            predictions = transformer(eng_sentence,
+                                      kn_sentence,
+                                      encoder_self_attention_mask.to(device),
+                                      decoder_self_attention_mask.to(device),
+                                      decoder_cross_attention_mask.to(device),
+                                      enc_start_token=False,
+                                      enc_end_token=False,
+                                      dec_start_token=True,
+                                      dec_end_token=False)
+            next_token_prob_distribution = predictions[0][word_counter]  # not actual probs
+            next_token_index = torch.argmax(next_token_prob_distribution).item()
+            next_token = index_to_kannada[next_token_index]
+            kn_sentence = (kn_sentence[0] + next_token, )
+            if next_token == END_TOKEN:
+                break
+
+        print(f"Evaluation translation (should we go to the mall?) : {kn_sentence}")
+        print("-------------------------------------------")
+
+
 if __name__ == '__main__':
     # warnings.filterwarnings('ignore')
     config = get_config()
@@ -450,5 +586,11 @@ if __name__ == '__main__':
             train_model2(config)
         case "model3":
             train_model3(config)
+        case "model4":
+            train_model4(config)
+        case "model5":
+            train_model5(config)
+        case "model6":
+            train_model6(config)
         case _:
             train_model1(config)

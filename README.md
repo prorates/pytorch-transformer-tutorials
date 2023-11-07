@@ -1,6 +1,8 @@
-# transformer-from-scratch
+# Pytorch Transformer Tutorials
 
-
+This repository contains different versions of Transformers implemented during tutorial using Pytorch.
+The github, video, documentation are listed bellow.
+This repository attempts to get those tutorials to work with new datasets.
 
 ## Model 1
 

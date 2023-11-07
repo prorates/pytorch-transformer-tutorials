@@ -28,6 +28,11 @@ from model4 import Transformer4, build_transformer4
 from model5 import Transformer5, build_transformer5
 from model6 import Transformer6, build_transformer6
 
+from dataset1 import get_ds1
+from dataset2 import get_ds2
+from dataset3 import get_ds3
+from dataset6 import get_ds6
+
 
 def reload_model(config, model, optimizer, initial_epoch, global_step):
     preload = config['preload']
@@ -86,19 +91,23 @@ def build_model5(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transf
     return model
 
 
-def build_model6(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer6:
-    model = build_transformer6(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+def build_model6(config: dict, vocab_src_len: int, vocab_tgt_len: int, src_to_index: dict, tgt_to_index: dict) -> Transformer6:
+    model = build_transformer6(vocab_src_len, vocab_tgt_len, src_to_index, tgt_to_index, config['seq_len'], config['seq_len'],
                                d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
     return model
 
 
 def test_model1(config: dict, device):
     config['model'] = "model1"
+    config['datasource'] = "opus_books"
+    config['lang_src'] = "en"
+    config['lang_tgt'] = "it"
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
     # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
+    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
     model = build_model1(config, 500, 500).to(device)
 
     print(model)
@@ -106,10 +115,16 @@ def test_model1(config: dict, device):
 
 
 def test_model2(config: dict, device):
+    config['model'] = "model2"
+    config['datasource'] = "translate"
+    config['lang_src'] = "en"
+    config['lang_tgt'] = "fr"
+
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
     # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
+    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds2(config, model_folder)
     model = build_model2(config, 500, 500).to(device)
 
     print(model)
@@ -118,11 +133,15 @@ def test_model2(config: dict, device):
 
 def test_model3(config: dict, device):
     config['model'] = "model3"
+    config['datasource'] = "translate"
+    config['lang_src'] = "en"
+    config['lang_tgt'] = "fr"
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
     # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
+    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds3(config, model_folder)
     model = build_model3(config, 500, 500).to(device)
 
     print(model)
@@ -130,12 +149,15 @@ def test_model3(config: dict, device):
 
 
 def test_model4(config: dict, device):
-    config['model'] = "model1"
+    config['model'] = "model4"
+    config['datasource'] = "translate"
+    config['lang_src'] = "en"
+    config['lang_tgt'] = "fr"
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
+    # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds2(config, model_folder)
     model = build_model4(config, 500, 500).to(device)
 
     print(model)
@@ -144,11 +166,14 @@ def test_model4(config: dict, device):
 
 def test_model5(config: dict, device):
     config['model'] = "model5"
+    config['datasource'] = "translate"
+    config['lang_src'] = "en"
+    config['lang_tgt'] = "fr"
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
+    # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds2(config, model_folder)
     model = build_model5(config, 500, 500).to(device)
 
     print(model)
@@ -157,12 +182,16 @@ def test_model5(config: dict, device):
 
 def test_model6(config: dict, device):
     config['model'] = "model6"
+    config['datasource'] = "translate"
+    config['lang_src'] = "en"
+    config['lang_tgt'] = "kn"
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
-    model = build_model6(config, 500, 500).to(device)
+    train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index = get_ds6(
+        config, model_folder)
+    model = build_model6(config, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index).to(device)
 
     print(model)
     model.train()
@@ -173,13 +202,9 @@ if __name__ == '__main__':
     config = get_config()
     device = get_device()
 
-    config['datasource'] = "mockds"
-    config['lang_src'] = "src"
-    config['lang_tgt'] = "tgt"
-
-    test_model1(config, device)
-    test_model2(config, device)
-    test_model3(config, device)
-    test_model4(config, device)
-    test_model5(config, device)
+    # test_model1(config, device)
+    # test_model2(config, device)
+    # test_model3(config, device)
+    # test_model4(config, device)
+    # test_model5(config, device)
     test_model6(config, device)

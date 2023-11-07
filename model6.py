@@ -321,12 +321,18 @@ class Transformer6(nn.Module):
         return out
 
 
-def build_transformer6(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int,
+def build_transformer6(src_vocab_size: int, tgt_vocab_size: int, src_to_index: dict, tgt_to_index: dict,
+                       src_seq_len: int, tgt_seq_len: int,
                        d_model: int = 512, N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048) -> Transformer6:
 
     # Create the transformer
     # JEB: TODO. Need to use the tokenizer instead
     transformer = Transformer6(d_model=d_model, ffn_hidden=d_ff, num_heads=h, drop_prob=dropout, num_layers=N, max_sequence_length=tgt_seq_len,
-                               kn_vocab_size=tgt_vocab_size, english_to_index=[], kannada_to_index=[], START_TOKEN=SOS, END_TOKEN=EOS, PADDING_TOKEN=PAD)
+                               kn_vocab_size=tgt_vocab_size, english_to_index=src_to_index, kannada_to_index=tgt_to_index, START_TOKEN=SOS, END_TOKEN=EOS, PADDING_TOKEN=PAD)
+
+    # When computing the loss, we are ignoring cases when the label is the padding token
+    for params in transformer.parameters():
+        if params.dim() > 1:
+            nn.init.xavier_uniform_(params)
 
     return transformer
