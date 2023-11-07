@@ -13,6 +13,7 @@ from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
 
 from pathlib import Path
+from config import EOS, SOS, PAD, UNK
 
 
 class Dataset1(Dataset):
@@ -31,12 +32,12 @@ class Dataset1(Dataset):
         # JEB: Big difference between video and source code.
         # DIFF1: tensor instead of Tensor
         # DIFF2: tgt instead of src
-        # self.sos_token = torch.Tensor([tokenizer_src.token_to_id(['[SOS]'])], dtype=torch.int64)
-        # self.eos_token = torch.Tensor([tokenizer_src.token_to_id(['[EOS]'])], dtype=torch.int64)
-        # self.pad_token = torch.Tensor([tokenizer_src.token_to_id(['[PAD]'])], dtype=torch.int64)
-        self.sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64)
-        self.eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
-        self.pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
+        # self.sos_token = torch.Tensor([tokenizer_src.token_to_id(SOS)], dtype=torch.int64)
+        # self.eos_token = torch.Tensor([tokenizer_src.token_to_id(EOS)], dtype=torch.int64)
+        # self.pad_token = torch.Tensor([tokenizer_src.token_to_id(PAD)], dtype=torch.int64)
+        self.sos_token = torch.tensor([tokenizer_tgt.token_to_id(SOS)], dtype=torch.int64)
+        self.eos_token = torch.tensor([tokenizer_tgt.token_to_id(EOS)], dtype=torch.int64)
+        self.pad_token = torch.tensor([tokenizer_tgt.token_to_id(PAD)], dtype=torch.int64)
 
     def __len__(self):
         return len(self.ds)
@@ -137,9 +138,9 @@ def get_or_build_tokenizer1(config: dict, model_folder: str, ds, lang: str) -> T
     tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         # Most code taken from: https://huggingface.co/docs/tokenizers/quicktour
-        tokenizer = Tokenizer(WordLevel(unk_token='[UNK]'))
+        tokenizer = Tokenizer(WordLevel(unk_token=UNK))
         tokenizer.pre_tokenizer = Whitespace()
-        trainer = WordLevelTrainer(special_tokens=["[UNK]", "[PAD]", "[SOS]", "[EOS]"], min_frequency=2)
+        trainer = WordLevelTrainer(special_tokens=[UNK, PAD, SOS, EOS], min_frequency=2)
         tokenizer.train_from_iterator(get_all_sentences1(ds, lang), trainer=trainer)
         tokenizer.save(str(tokenizer_path))
     else:

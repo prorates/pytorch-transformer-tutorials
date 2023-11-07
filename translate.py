@@ -13,12 +13,13 @@ from config import get_model_folder, get_weights_file_path, get_config, latest_w
 from model1 import Transformer1, build_transformer1
 from model2 import Transformer2, build_transformer2
 from model3 import Transformer3, build_transformer3
+from config import EOS, SOS, PAD, UNK
 
 
 def greedy_decode(model: Transformer1, source, source_mask, tokenizer_src: Tokenizer,
                   tokenizer_tgt: Tokenizer, max_len: int, device):
-    eos_idx = tokenizer_tgt.token_to_id('[EOS]')
-    sos_idx = tokenizer_tgt.token_to_id('[EOS]')
+    eos_idx = tokenizer_tgt.token_to_id(EOS)
+    sos_idx = tokenizer_tgt.token_to_id(SOS)
 
     # Precompute the encoder output and reuse it for every step
     # JEB: source at point is not a batch hence the unsqueeze(0).
@@ -100,19 +101,19 @@ def translate1(config: dict, sentence: str):
     model = reload_model(config, model)
 
     # if the sentence is a number use it as an index to the test set
-    sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64)
-    eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
-    pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
+    sos_token = torch.tensor([tokenizer_tgt.token_to_id(SOS)], dtype=torch.int64)
+    eos_token = torch.tensor([tokenizer_tgt.token_to_id(EOS)], dtype=torch.int64)
+    pad_token = torch.tensor([tokenizer_tgt.token_to_id(PAD)], dtype=torch.int64)
 
     model.eval()
     with torch.no_grad():
         # Precompute the encoder output and reuse it for every generation step
         # source = tokenizer_src.encode(sentence)
         # source = torch.cat([
-        #     torch.tensor([tokenizer_src.token_to_id('[SOS]')], dtype=torch.int64),
+        #     torch.tensor([tokenizer_src.token_to_id(SOS)], dtype=torch.int64),
         #     torch.tensor(source.ids, dtype=torch.int64),
-        #     torch.tensor([tokenizer_src.token_to_id('[EOS]')], dtype=torch.int64),
-        #     torch.tensor([tokenizer_src.token_to_id('[PAD]')] * (max_len - len(source.ids) - 2), dtype=torch.int64)
+        #     torch.tensor([tokenizer_src.token_to_id(EOS)], dtype=torch.int64),
+        #     torch.tensor([tokenizer_src.token_to_id(PAD)] * (max_len - len(source.ids) - 2), dtype=torch.int64)
         # ], dim=0).to(device)
         enc_input_tokens = tokenizer_src.encode(sentence).ids
         enc_num_padding_tokens = max_len - len(enc_input_tokens) - 2

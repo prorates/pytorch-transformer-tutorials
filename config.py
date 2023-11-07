@@ -2,6 +2,11 @@ from pathlib import Path
 import os
 import torch
 
+EOS = '<eos>'
+SOS = '<sos>'
+UNK = '<unk>'
+PAD = '<pad>'
+
 
 def get_config():
     return {

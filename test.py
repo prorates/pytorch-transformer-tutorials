@@ -101,6 +101,9 @@ def test_model1(config: dict, device):
     # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
     model = build_model1(config, 500, 500).to(device)
 
+    print(model)
+    model.train()
+
 
 def test_model2(config: dict, device):
     model_folder = get_model_folder(config)
@@ -108,6 +111,9 @@ def test_model2(config: dict, device):
 
     # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
     model = build_model2(config, 500, 500).to(device)
+
+    print(model)
+    model.train()
 
 
 def test_model3(config: dict, device):
@@ -119,6 +125,9 @@ def test_model3(config: dict, device):
     # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
     model = build_model3(config, 500, 500).to(device)
 
+    print(model)
+    model.train()
+
 
 def test_model4(config: dict, device):
     config['model'] = "model1"
@@ -128,6 +137,9 @@ def test_model4(config: dict, device):
 
     # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
     model = build_model4(config, 500, 500).to(device)
+
+    print(model)
+    model.train()
 
 
 def test_model5(config: dict, device):
@@ -139,6 +151,9 @@ def test_model5(config: dict, device):
     # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
     model = build_model5(config, 500, 500).to(device)
 
+    print(model)
+    model.train()
+
 
 def test_model6(config: dict, device):
     config['model'] = "model6"
@@ -148,6 +163,9 @@ def test_model6(config: dict, device):
 
     # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
     model = build_model6(config, 500, 500).to(device)
+
+    print(model)
+    model.train()
 
 
 if __name__ == '__main__':

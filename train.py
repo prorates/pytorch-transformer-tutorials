@@ -20,6 +20,7 @@ from dataset3 import get_ds3
 
 from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path
 from config import get_console_width, get_device
+from config import EOS, SOS, PAD, UNK
 
 from model1 import Transformer1, build_transformer1
 from model2 import Transformer2, build_transformer2
@@ -31,8 +32,8 @@ from model6 import Transformer6, build_transformer6
 
 def greedy_decode(model: Transformer1, source, source_mask, tokenizer_src: Tokenizer,
                   tokenizer_tgt: Tokenizer, max_len: int, device):
-    sos_idx = tokenizer_tgt.token_to_id('[SOS]')
-    eos_idx = tokenizer_tgt.token_to_id('[EOS]')
+    sos_idx = tokenizer_tgt.token_to_id(SOS)
+    eos_idx = tokenizer_tgt.token_to_id(EOS)
 
     # Precompute the encoder output and reuse it for every step
     encoder_output = model.encode(source, source_mask)
@@ -211,7 +212,7 @@ def train_model1(config: dict):
     global_step = 0
     model, initial_epoch, optimizer, global_step = reload_model(config, model, optimizer, initial_epoch, global_step)
 
-    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('[PAD]'), label_smoothing=0.1).to(device)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id(PAD), label_smoothing=0.1).to(device)
 
     for epoch in range(initial_epoch, config['num_epochs']):
         if (device == 'cuda'):
@@ -281,7 +282,7 @@ def train_model2(config: dict):
     global_step = 0
     model, initial_epoch, optimizer, global_step = reload_model(config, model, optimizer, initial_epoch, global_step)
 
-    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('<pad>')).to(device)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id(PAD)).to(device)
 
     for epoch in range(initial_epoch, config['num_epochs']):
         if (device == 'cuda'):
@@ -386,7 +387,7 @@ def train_model3(config: dict):
     global_step = 0
     model, initial_epoch, optimizer, global_step = reload_model(config, model, optimizer, initial_epoch, global_step)
 
-    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('<pad>'), label_smoothing=0.1).to(device)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id(PAD), label_smoothing=0.1).to(device)
 
     for epoch in range(initial_epoch, config['num_epochs']):
         if (device == 'cuda'):

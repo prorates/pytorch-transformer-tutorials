@@ -3,6 +3,7 @@ import torch
 import math
 from torch import nn
 import torch.nn.functional as F
+from config import SOS, EOS, PAD, UNK
 
 
 def get_device():
@@ -326,6 +327,6 @@ def build_transformer6(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: in
     # Create the transformer
     # JEB: TODO. Need to use the tokenizer instead
     transformer = Transformer6(d_model=d_model, ffn_hidden=d_ff, num_heads=h, drop_prob=dropout, num_layers=N, max_sequence_length=tgt_seq_len,
-                               kn_vocab_size=tgt_vocab_size, english_to_index=[], kannada_to_index=[], START_TOKEN="<sos>", END_TOKEN="<eos>", PADDING_TOKEN="<pad>")
+                               kn_vocab_size=tgt_vocab_size, english_to_index=[], kannada_to_index=[], START_TOKEN=SOS, END_TOKEN=EOS, PADDING_TOKEN=PAD)
 
     return transformer

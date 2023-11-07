@@ -14,6 +14,7 @@ from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
 
 from pathlib import Path
+from config import EOS, SOS, PAD, UNK
 
 
 def get_ds2_old(config: dict, model_folder: str, device) -> Tuple[Tensor, Tensor, int, int]:
@@ -42,9 +43,9 @@ class Dataset2(Dataset):
         self.tgt_lang = tgt_lang
         self.seq_len = seq_len
 
-        self.sos_token = torch.tensor([t_tgt.token_to_id("<sos>")], dtype=torch.int64)
-        self.eos_token = torch.tensor([t_tgt.token_to_id("<eos>")], dtype=torch.int64)
-        self.pad_token = torch.tensor([t_tgt.token_to_id("<pad>")], dtype=torch.int64)
+        self.sos_token = torch.tensor([t_tgt.token_to_id(SOS)], dtype=torch.int64)
+        self.eos_token = torch.tensor([t_tgt.token_to_id(EOS)], dtype=torch.int64)
+        self.pad_token = torch.tensor([t_tgt.token_to_id(PAD)], dtype=torch.int64)
 
     def __len__(self):
         return len(self.ds)
@@ -86,7 +87,7 @@ class Dataset2(Dataset):
 
         # Add SOS to decoder input
         # Model1 and Model3 are different. Both SOS and EOS are added
-        # tgt = data.Field(lower=True, tokenize=t_tgt.tokenizer, init_token='<sos>', eos_token='<eos>')
+        # tgt = data.Field(lower=True, tokenize=t_tgt.tokenizer, init_token=SOS, eos_token=EOS)
         decoder_input = torch.cat(
             [
                 self.sos_token,
@@ -146,9 +147,9 @@ def get_all_sentences2(ds, lang):
 def get_or_build_tokenizer2(config: dict, model_folder: str, ds, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
-        tokenizer = Tokenizer(WordLevel(unk_token='<unk>'))
+        tokenizer = Tokenizer(WordLevel(unk_token=UNK))
         tokenizer.pre_tokenizer = Whitespace()
-        trainer = WordLevelTrainer(special_tokens=["<unk>", "<pad>", "<sos>", "<eos>"], min_frequency=2)
+        trainer = WordLevelTrainer(special_tokens=[UNK, PAD, SOS, EOS], min_frequency=2)
         tokenizer.train_from_iterator(get_all_sentences2(ds, lang), trainer=trainer)
         tokenizer.save(str(tokenizer_path))
     else:
