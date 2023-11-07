@@ -518,8 +518,15 @@ def train_model6(config: dict):
                                          dec_end_token=True)
             labels = transformer.decoder.sentence_embedding.batch_tokenize(kn_batch, start_token=False, end_token=True)
             loss = loss_fn(kn_predictions.view(-1, tgt_vocab_size).to(device), labels.view(-1).to(device)).to(device)
+
             valid_indicies = torch.where(labels.view(-1) == tgt_to_index[PAD], False, True)
             loss = loss.sum() / valid_indicies.sum()
+            batch_iterator.set_postfix({"Loss": f"{loss:6.3f}"})
+
+            # Log of loss
+            writer.add_scalar('train loss', loss, global_step)
+            writer.flush()
+
             loss.backward()
             optimizer.step()
 
@@ -540,7 +547,7 @@ def train_model6(config: dict):
         # validate_model6(transformer, val_dataloader, tokenizer_src, tokenizer_tgt, config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Save the model at the end of every epoch
-        save_model(model, optimizer, epoch, global_step)
+        save_model(transformer, optimizer, epoch, global_step)
 
 
 def validate_model6(transformer: Transformer6, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,

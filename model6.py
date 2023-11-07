@@ -185,6 +185,7 @@ class Encoder(nn.Module):
 
     def forward(self, x, self_attention_mask, start_token, end_token):
         x = self.sentence_embedding(x, start_token, end_token)
+        # print(x.shape)
         x = self.layers(x, self_attention_mask)
         return x
 
@@ -277,6 +278,7 @@ class Decoder(nn.Module):
 
     def forward(self, x, y, self_attention_mask, cross_attention_mask, start_token, end_token):
         y = self.sentence_embedding(y, start_token, end_token)
+        # print(y.shape)
         y = self.layers(x, y, self_attention_mask, cross_attention_mask)
         return y
 
