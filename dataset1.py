@@ -147,6 +147,16 @@ def get_or_build_tokenizer1(config: dict, model_folder: str, ds, lang: str) -> T
     return tokenizer
 
 
+def get_tokenizer1(config: dict, model_folder: str, lang: str) -> Tokenizer:
+    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
+    if not Path.exists(tokenizer_path):
+        print(f"Tokenizer does not exists {tokenizer_path}")
+        raise ValueError(f"{tokenizer_path} Tokenizer does not exist")
+    else:
+        tokenizer = Tokenizer.from_file(str(tokenizer_path))
+    return tokenizer
+
+
 def get_ds1(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
     # load_dataset(path, name, split=)
     ds_raw = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='train')
@@ -181,3 +191,22 @@ def get_ds1(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
     val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
 
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
+
+
+def get_testing_ds1(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:
+
+    # build tokenizers
+    tokenizer_src = get_tokenizer1(config, model_folder, config['lang_src'])
+    tokenizer_tgt = get_tokenizer1(config, model_folder, config['lang_tgt'])
+
+    # keep 90% for training and 10% for validation
+    label = None
+    if isinstance(sentence, int) or sentence.isdigit():
+        id = int(sentence)
+        ds = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='all')
+        ds = Dataset1(ds, tokenizer_src, tokenizer_tgt,
+                      config['lang_src'], config['lang_tgt'], config['seq_len'])
+        sentence = ds[id]['src_text']
+        label = ds[id]["tgt_text"]
+
+    return sentence, label, tokenizer_src, tokenizer_tgt

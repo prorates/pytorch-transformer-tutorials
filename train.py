@@ -24,6 +24,9 @@ from config import get_console_width, get_device
 from model1 import Transformer1, build_transformer1
 from model2 import Transformer2, build_transformer2
 from model3 import Transformer3, build_transformer3
+from model4 import Transformer4, build_transformer4
+from model5 import Transformer5, build_transformer5
+from model6 import Transformer6, build_transformer6
 
 
 def greedy_decode(model: Transformer1, source, source_mask, tokenizer_src: Tokenizer,
@@ -63,8 +66,93 @@ def greedy_decode(model: Transformer1, source, source_mask, tokenizer_src: Token
     return decoder_input.squeeze(0)
 
 
-def run_validation(model: Transformer1, validation_ds, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
-                   max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
+def collect_training_metrics(writer, predicted, expected, global_step):
+    if writer:
+        # Evaluate the character error rate
+        # Compute the char error rate
+        metric = torchmetrics.text.CharErrorRate()
+        cer = metric(predicted, expected)
+        writer.add_scalar('validation cer', cer, global_step)
+        writer.flush()
+
+        # Compute the word error rate
+        metric = torchmetrics.text.WordErrorRate()
+        wer = metric(predicted, expected)
+        writer.add_scalar('validation wer', wer, global_step)
+        writer.flush()
+
+        # Compute the BLEU metric
+        metric = torchmetrics.text.BLEUScore()
+        bleu = metric(predicted, expected)
+        writer.add_scalar('validation BLEU', bleu, global_step)
+        writer.flush()
+
+
+def reload_model(config, model, optimizer, initial_epoch, global_step):
+    preload = config['preload']
+    model_filename = latest_weights_file_path(
+        config) if preload == 'latest' else get_weights_file_path(config, preload) if preload else None
+    if model_filename:
+        print(f'Preloading model {model_filename}')
+        state = torch.load(model_filename)
+        model.load_state_dict(state['model_state_dict'])  # JEB: This was not in the video
+        initial_epoch = state['epoch'] + 1
+        optimizer.load_state_dict(state['optimizer_state_dict'])
+        global_step = state['global_step']
+    else:
+        print('No model to preload, starting from scratch')
+    return model, initial_epoch, optimizer, global_step
+
+
+def save_model(model, optimizer, epoch, global_step):
+    # Save the model at the end of every epoch
+    model_filename = get_weights_file_path(config, f'{epoch:02d}')
+    torch.save({
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'global_step': global_step
+    }, model_filename)
+
+
+def build_model1(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer1:
+    model = build_transformer1(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    return model
+
+
+def build_model2(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer2:
+    model = build_transformer2(vocab_src_len, vocab_tgt_len, config['seq_len'],
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    return model
+
+
+def build_model3(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer3:
+    model = build_transformer3(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+                               d_model=config['d_model'], n_layers=config['N'], heads=config['h'], dropout=config['dropout'])
+    return model
+
+
+def build_model4(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer4:
+    model = build_transformer4(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    return model
+
+
+def build_model5(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer5:
+    model = build_transformer5(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    return model
+
+
+def build_model6(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer6:
+    model = build_transformer6(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    return model
+
+
+def validate_model1(model: Transformer1, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
+                    max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
     model.eval()
     count = 0
 
@@ -102,57 +190,7 @@ def run_validation(model: Transformer1, validation_ds, tokenizer_src: Tokenizer,
                 print_msg('-' * console_width)
                 break
     if writer:
-        # Evaluate the character error rate
-        # Compute the char error rate
-        metric = torchmetrics.text.CharErrorRate()
-        cer = metric(predicted, expected)
-        writer.add_scalar('validation cer', cer, global_step)
-        writer.flush()
-
-        # Compute the word error rate
-        metric = torchmetrics.text.WordErrorRate()
-        wer = metric(predicted, expected)
-        writer.add_scalar('validation wer', wer, global_step)
-        writer.flush()
-
-        # Compute the BLEU metric
-        metric = torchmetrics.text.BLEUScore()
-        bleu = metric(predicted, expected)
-        writer.add_scalar('validation BLEU', bleu, global_step)
-        writer.flush()
-
-
-def preload_model(model, optimizer, initial_epoch, global_step):
-    preload = config['preload']
-    model_filename = latest_weights_file_path(
-        config) if preload == 'latest' else get_weights_file_path(config, preload) if preload else None
-    if model_filename:
-        print(f'Preloading model {model_filename}')
-        state = torch.load(model_filename)
-        model.load_state_dict(state['model_state_dict'])  # JEB: This was not in the video
-        initial_epoch = state['epoch'] + 1
-        optimizer.load_state_dict(state['optimizer_state_dict'])
-        global_step = state['global_step']
-    else:
-        print('No model to preload, starting from scratch')
-    return model, initial_epoch, optimizer, global_step
-
-
-def save_model(model, optimizer, epoch, global_step):
-    # Save the model at the end of every epoch
-    model_filename = get_weights_file_path(config, f'{epoch:02d}')
-    torch.save({
-        'epoch': epoch,
-        'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict(),
-        'global_step': global_step
-    }, model_filename)
-
-
-def get_model1(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer1:
-    model = build_transformer1(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
-                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
-    return model
+        collect_training_metrics(writer, predicted, expected, global_step)
 
 
 def train_model1(config: dict):
@@ -162,7 +200,7 @@ def train_model1(config: dict):
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
     train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
-    model = get_model1(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
+    model = build_model1(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
 
     # Tensorboard
     writer = SummaryWriter(get_model_folder(config) + "/" + config['experiment_name'])
@@ -171,7 +209,7 @@ def train_model1(config: dict):
 
     initial_epoch = 0
     global_step = 0
-    model, initial_epoch, optimizer, global_step = preload_model(model, optimizer, initial_epoch, global_step)
+    model, initial_epoch, optimizer, global_step = reload_model(config, model, optimizer, initial_epoch, global_step)
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('[PAD]'), label_smoothing=0.1).to(device)
 
@@ -218,17 +256,11 @@ def train_model1(config: dict):
             global_step += 1
 
         # Run validation at the end of each epoch
-        run_validation(model, val_dataloader, tokenizer_src, tokenizer_tgt,
-                       config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+        validate_model1(model, val_dataloader, tokenizer_src, tokenizer_tgt,
+                        config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Save the model at the end of every epoch
         save_model(model, optimizer, epoch, global_step)
-
-
-def get_model2(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer2:
-    model = build_transformer2(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
-                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
-    return model
 
 
 def train_model2(config: dict):
@@ -237,8 +269,8 @@ def train_model2(config: dict):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    src_data, tgt_data, fake_src_vocab_size, fake_tgt_vocab_size = get_ds2(config, model_folder, device)
-    model = get_model2(config, fake_src_vocab_size, fake_tgt_vocab_size)
+    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds2(config, model_folder)
+    model = build_model2(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
 
     # Tensorboard
     writer = SummaryWriter(get_model_folder(config) + "/" + config['experiment_name'])
@@ -247,25 +279,33 @@ def train_model2(config: dict):
 
     initial_epoch = 0
     global_step = 0
-    model, initial_epoch, optimizer, global_step = preload_model(model, optimizer, initial_epoch, global_step)
+    model, initial_epoch, optimizer, global_step = reload_model(config, model, optimizer, initial_epoch, global_step)
 
-    # loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('[PAD]'), label_smoothing=0.1).to(device)
-    criterion = nn.CrossEntropyLoss(ignore_index=0).to(device)
+    loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('<pad>')).to(device)
 
     for epoch in range(initial_epoch, config['num_epochs']):
         if (device == 'cuda'):
             torch.cuda.empty_cache()
 
         model.train()
-        # batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
-        # for batch in batch_iterator:
-        if True:
+        batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
+        for batch in batch_iterator:
             optimizer.zero_grad()
-            nopeakmask = model.build_nopeakmask(config['seq_len'] - 1).to(device)
-            output = model(src_data, tgt_data[:, :-1].to(device), nopeakmask)
-            loss = criterion(output.contiguous().view(-1, fake_tgt_vocab_size),
-                             tgt_data[:, 1:].contiguous().view(-1))
-            # batch_iterator.set_postfix({"Loss": f"{loss.item():6.3f}"})
+            src_data = batch['src'].to(device)  # (B, SeqLen)
+            tgt_data = batch['tgt'].to(device)  # (B, SeqLen)
+            src_mask = batch['src_mask'].to(device)  # (B, 1, 1, SeqLen)
+            tgt_mask = batch['tgt_mask'].to(device)  # (B, 1, 1, SeqLen)
+
+            # JEB: Like for Model3. Need to have the full length
+            # output = model(src_data, tgt_data[:, :-1].to(device), src_mask, tgt_mask)
+            output = model(src_data, tgt_data, src_mask, tgt_mask)
+
+            # JEB: Same issue as for Model3
+            # loss = loss_fn(output.contiguous().view(-1, tokenizer_tgt.get_vocab_size()),
+            #                 tgt_data[:, 1:].contiguous().view(-1))
+            loss = loss_fn(output.contiguous().view(-1, tokenizer_tgt.get_vocab_size()),
+                           tgt_data.contiguous().view(-1))
+            batch_iterator.set_postfix({"Loss": f"{loss.item():6.3f}"})
 
             # Log of loss
             writer.add_scalar('train loss', loss.item(), global_step)
@@ -278,16 +318,52 @@ def train_model2(config: dict):
             optimizer.step()
 
             global_step += 1
-            print(f"Epoch: {epoch+1}, Loss: {loss.item()}")
+            # print(f"Epoch: {epoch+1}, Loss: {loss.item()}")
 
         # Save the model at the end of every epoch
         save_model(model, optimizer, epoch, global_step)
 
 
-def get_model3(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer3:
-    model = build_transformer3(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
-                               d_model=config['d_model'], n_layers=config['N'], heads=config['h'], dropout=config['dropout'])
-    return model
+def validate_model3(model: Transformer3, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
+                    max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
+    model.eval()
+    count = 0
+
+    source_texts = []
+    expected = []
+    predicted = []
+
+    console_width = get_console_width()
+
+    with torch.no_grad():
+        for batch in validation_ds:
+            count += 1
+            encoder_input = batch['src'].to(device)
+            encoder_mask = batch['src_mask'].to(device)
+
+            assert encoder_input.size(0) == 1, "Batch size must be 1 for validation"
+
+            # model_out = greedy_decode(model, encoder_input, encoder_mask, tokenizer_src, tokenizer_tgt, max_len, device)
+
+            source_text = batch['src_text'][0]
+            target_text = batch['tgt_text'][0]
+            model_out_text = tokenizer_tgt.decode(model_out.detach().cpu().numpy())
+
+            source_texts.append(source_text)
+            expected.append(target_text)
+            predicted.append(model_out_text)
+
+            # Print the message to the console without interfering with the progress bar
+            print_msg('-' * console_width)
+            print_msg(f"{f'SOURCE: ':>12}{source_text}")
+            print_msg(f"{f'TARGET: ':>12}{target_text}")
+            print_msg(f"{f'PREDICTED: ':>12}{model_out_text}")
+
+            if count == num_examples:
+                print_msg('-' * console_width)
+                break
+    if writer:
+        collect_training_metrics(writer, predicted, expected, global_step)
 
 
 def train_model3(config: dict):
@@ -297,7 +373,7 @@ def train_model3(config: dict):
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
     train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds3(config, model_folder)
-    model = get_model3(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
+    model = build_model3(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'], betas=(0.9, 0.98), eps=1e-9)
     # if opt.SGDR == True:
@@ -308,7 +384,7 @@ def train_model3(config: dict):
 
     initial_epoch = 0
     global_step = 0
-    model, initial_epoch, optimizer, global_step = preload_model(model, optimizer, initial_epoch, global_step)
+    model, initial_epoch, optimizer, global_step = reload_model(config, model, optimizer, initial_epoch, global_step)
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('<pad>'), label_smoothing=0.1).to(device)
 
@@ -366,9 +442,12 @@ if __name__ == '__main__':
     # warnings.filterwarnings('ignore')
     config = get_config()
 
-    if "model2" == config['alt_model']:
-        train_model2(config)
-    elif "model3" == config['alt_model']:
-        train_model3(config)
-    else:
-        train_model1(config)
+    match config['alt_model']:
+        case "model1":
+            train_model1(config)
+        case "model2":
+            train_model2(config)
+        case "model3":
+            train_model3(config)
+        case _:
+            train_model1(config)

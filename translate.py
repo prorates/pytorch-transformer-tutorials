@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 from pathlib import Path
-from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path, get_device
-from model1 import build_transformer1
-from model1 import Transformer1
 from tokenizers import Tokenizer
-from datasets import load_dataset
-from dataset1 import Dataset1, translation_mask
 import torch
 import sys
+
+from dataset1 import get_testing_ds1, casual_mask, translation_mask
+from dataset2 import get_testing_ds2
+from dataset3 import get_testing_ds3
+
+from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path, get_device
+
+from model1 import Transformer1, build_transformer1
+from model2 import Transformer2, build_transformer2
+from model3 import Transformer3, build_transformer3
 
 
 def greedy_decode(model: Transformer1, source, source_mask, tokenizer_src: Tokenizer,
@@ -50,8 +55,51 @@ def greedy_decode(model: Transformer1, source, source_mask, tokenizer_src: Token
     return decoder_input[0].tolist()
 
 
-def run_translation(label: str, sentence: str, model: Transformer1, tokenizer_src: Tokenizer,
-                    tokenizer_tgt: Tokenizer, max_len: int, device):
+def reload_model(config, model):
+    preload = config['preload']
+    model_filename = latest_weights_file_path(
+        config) if preload == 'latest' else get_weights_file_path(config, preload) if preload else None
+    print(f'Preloading model {model_filename}')
+    if model_filename:
+        state = torch.load(model_filename)
+        model.load_state_dict(state['model_state_dict'])  # JEB: This was not in the video
+    else:
+        raise ValueError(f"{model_filename} Pretrained Model does not exist")
+    return model
+
+
+def build_model1(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer1:
+    model = build_transformer1(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    return model
+
+
+def build_model2(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer2:
+    model = build_transformer2(vocab_src_len, vocab_tgt_len, config['seq_len'],
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    return model
+
+
+def build_model3(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer3:
+    model = build_transformer3(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
+                               d_model=config['d_model'], n_layers=config['N'], heads=config['h'], dropout=config['dropout'])
+    return model
+
+
+def translate1(config: dict, sentence: str):
+    device = get_device()
+
+    model_folder = get_model_folder(config)
+    if not Path.exists(Path(model_folder)):
+        raise ValueError(f"{model_folder} model_folder does not exist")
+
+    sentence, label, tokenizer_src, tokenizer_tgt = get_testing_ds1(config, model_folder, sentence)
+    model = build_model1(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
+
+    # Load the pretrained weights
+    model = reload_model(config, model)
+
+    # if the sentence is a number use it as an index to the test set
     sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64)
     eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64)
     pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
@@ -86,64 +134,57 @@ def run_translation(label: str, sentence: str, model: Transformer1, tokenizer_sr
             print(f"{f'TARGET: ':>12}{label}")
         print(f"{f'PREDICTED: ':>12}", end='')
 
-        model_out = greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_len, device)
+        model_out = greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, config['seq_len'], device)
 
     # convert ids to tokens
     return tokenizer_tgt.decode(model_out)
 
 
-def get_tokenizer(config: dict, model_folder: str, lang: str) -> Tokenizer:
-    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
-    if not Path.exists(tokenizer_path):
-        print(f"Tokenizer does not exists {tokenizer_path}")
-        raise ValueError(f"{tokenizer_path} Tokenizer does not exist")
-    else:
-        return Tokenizer.from_file(str(tokenizer_path))
-
-
-def get_model(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer1:
-    model = build_transformer1(vocab_src_len, vocab_tgt_len, config['seq_len'], config['seq_len'],
-                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
-    return model
-
-
-def translate(config: dict, sentence: str):
+def translate2(config: dict, sentence: str):
     device = get_device()
 
     model_folder = get_model_folder(config)
     if not Path.exists(Path(model_folder)):
         raise ValueError(f"{model_folder} model_folder does not exist")
 
-    tokenizer_src = get_tokenizer(config, model_folder, config['lang_src'])
-    tokenizer_tgt = get_tokenizer(config, model_folder, config['lang_tgt'])
-    model = get_model(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
+    sentence, label, tokenizer_src, tokenizer_tgt = get_testing_ds2(config, model_folder, sentence)
+    model = build_model2(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
 
     # Load the pretrained weights
-    preload = config['preload']
-    model_filename = latest_weights_file_path(
-        config) if preload == 'latest' else get_weights_file_path(config, preload) if preload else None
-    if model_filename:
-        print(f'Preloading model {model_filename}')
-        state = torch.load(model_filename)
-        model.load_state_dict(state['model_state_dict'])  # JEB: This was not in the video
-    else:
-        raise ValueError(f"No pretrained model to load")
+    model = reload_model(config, model)
 
     # if the sentence is a number use it as an index to the test set
-    label = ""
-    if type(sentence) == int or sentence.isdigit():
-        id = int(sentence)
-        ds = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='all')
-        ds = Dataset1(ds, tokenizer_src, tokenizer_tgt,
-                      config['lang_src'], config['lang_tgt'], config['seq_len'])
-        sentence = ds[id]['src_text']
-        label = ds[id]["tgt_text"]
+    # run_translation(label, sentence, model, tokenizer_src, tokenizer_tgt, config['seq_len'], device)
 
-    run_translation(label, sentence, model, tokenizer_src, tokenizer_tgt, config['seq_len'], device)
+
+def translate3(config: dict, sentence: str):
+    device = get_device()
+
+    model_folder = get_model_folder(config)
+    if not Path.exists(Path(model_folder)):
+        raise ValueError(f"{model_folder} model_folder does not exist")
+
+    sentence, label, tokenizer_src, tokenizer_tgt = get_testing_ds3(config, model_folder, sentence)
+    model = build_model3(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
+
+    # Load the pretrained weights
+    model = reload_model(config, model)
+
+    # if the sentence is a number use it as an index to the test set
+    # run_translation(label, sentence, model, tokenizer_src, tokenizer_tgt, config['seq_len'], device)
 
 
 if __name__ == '__main__':
     # warnings.filterwarnings('ignore')
     config = get_config()
     # read sentence from argument
-    translate(config, sys.argv[1] if len(sys.argv) > 1 else "I am not a very good a student.")
+    sentence = sys.argv[1] if len(sys.argv) > 1 else "I am not a very good a student."
+    match config['alt_model']:
+        case "model1":
+            response = translate1(config, sentence)
+        case "model2":
+            reponse = translate2(config, sentence)
+        case "model3":
+            response = translate3(config, sentence)
+        case _:
+            response = translate1(config, sentence)

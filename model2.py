@@ -5,6 +5,7 @@ import torch.utils.data as data
 from torch import Tensor
 import math
 
+
 class MultiHeadAttention(nn.Module):
     def __init__(self, d_model: int, num_heads: int):
         super(MultiHeadAttention, self).__init__()
@@ -26,6 +27,8 @@ class MultiHeadAttention(nn.Module):
         if mask is not None:
             # Replace all the value for which mask == 0 with -1e9 (minus infinity)
             # Some words will not be able to see future words...or padding values
+            # JEB: This was in model3
+            mask = mask.unsqueeze(1)
             attn_scores = attn_scores.masked_fill(mask == 0, -1e9)
         attn_probs = torch.softmax(attn_scores, dim=-1)  # (Batch, h, Seq_Len, Seq_Len)
 
@@ -39,7 +42,7 @@ class MultiHeadAttention(nn.Module):
         return x.view(batch_size, seq_length, self.num_heads, self.d_k).transpose(1, 2)
 
     def combine_heads(self, x):
-        batch_size, _, seq_length, d_k = x.size()
+        batch_size, num_heads, seq_length, d_k = x.size()
         return x.transpose(1, 2).contiguous().view(batch_size, seq_length, self.d_model)
 
     def forward(self, Q, K, V, mask=None):
@@ -149,18 +152,7 @@ class Transformer2(nn.Module):
         self.fc = nn.Linear(d_model, tgt_vocab_size)
         self.dropout = nn.Dropout(dropout)
 
-    def build_nopeakmask(self, seq_len: int) -> Tensor:
-        return (1 - torch.triu(torch.ones(1, seq_len, seq_len), diagonal=1)).bool()
-
-    def generate_mask(self, src, tgt, nopeak_mask):
-        src_mask = (src != 0).unsqueeze(1).unsqueeze(2)
-        tgt_mask = (tgt != 0).unsqueeze(1).unsqueeze(3)
-        seq_length = tgt.size(1)
-        tgt_mask = tgt_mask & nopeak_mask
-        return src_mask, tgt_mask
-
-    def forward(self, src, tgt, nopeakmask):
-        src_mask, tgt_mask = self.generate_mask(src, tgt, nopeakmask)
+    def forward(self, src, tgt, src_mask, tgt_mask):
         src_embedded = self.dropout(self.positional_encoding(self.encoder_embedding(src)))
         tgt_embedded = self.dropout(self.positional_encoding(self.decoder_embedding(tgt)))
 

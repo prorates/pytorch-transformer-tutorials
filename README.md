@@ -20,6 +20,16 @@ The source code seems to be [here](https://github.com/SamLynnEvans/Transformer?r
 
 Builld a GPT from scratch [video][https://youtu.be/kCc8FmEb1nY]
 
+## Model 5
+
+The source code is based on the official pytorch Transformer. Code modified just for tutorial purpose.
+
+## Model 6
+
+This is based on the following [video](https://www.youtube.com/playlist?list=PLTl9hO2Oobd97qfWC40gOSU8C0iu0m2l4)
+The code is original code is available [here](https://github.com/ajhalthor/Transformer-Neural-Network)
+
+
 ## Size requirements
 
 This is coming from [here](https://schartz.github.io/blog/estimating-memory-requirements-of-transformers/)

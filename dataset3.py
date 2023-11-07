@@ -106,15 +106,30 @@ class Dataset3(Dataset):
         return {
             "src": encoder_input,
             "trg": decoder_input,
-            # "src_mask": (encoder_input != self.pad_token).unsqueeze(0).unsqueeze(0).int(),
             "src_mask": (encoder_input != self.pad_token).unsqueeze(-2),
-            # "trg_mask": (decoder_input != self.pad_token).unsqueeze(0).int() & casual_mask(decoder_input.size(0)),
             # JEB: Issue here & nopeak_mask(decoder_input.size(0)),
             "trg_mask": (decoder_input != self.pad_token).unsqueeze(-2),
             "label": label,
             "src_text": src_text,
             "tgt_text": tgt_text
         }
+
+    def nopeak_mask(self, size):
+        np_mask = np.triu(np.ones((1, size, size)), k=1).astype('uint8')
+        np_mask = Variable(torch.from_numpy(np_mask == 0))
+        return np_mask
+
+    def create_masks(self, src, trg):
+        src_mask = (src != self.pad_token).unsqueeze(-2)
+
+        if trg is not None:
+            trg_mask = (trg != self.pad_token).unsqueeze(-2)
+            size = trg.size(1)  # get seq_len for matrix
+            np_mask = nopeak_mask(size)
+            trg_mask = trg_mask & np_mask
+        else:
+            trg_mask = None
+        return src_mask, trg_mask
 
     # def create_fields(self, opt):
     #     TRG = data.Field(lower=True, tokenize=t_trg.tokenizer, init_token='<sos>', eos_token='<eos>')
@@ -147,6 +162,16 @@ def get_or_build_tokenizer3(config: dict, model_folder: str, ds, lang: str) -> T
     return tokenizer
 
 
+def get_tokenizer3(config: dict, model_folder: str, lang: str) -> Tokenizer:
+    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
+    if not Path.exists(tokenizer_path):
+        print(f"Tokenizer does not exists {tokenizer_path}")
+        raise ValueError(f"{tokenizer_path} Tokenizer does not exist")
+    else:
+        tokenizer = Tokenizer.from_file(str(tokenizer_path))
+    return tokenizer
+
+
 def get_ds3(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
     # load_dataset(path, name, split=)
     ds_raw = load_dataset(
@@ -155,7 +180,6 @@ def get_ds3(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
     # build tokenizers
     tokenizer_src = get_or_build_tokenizer3(config, model_folder, ds_raw, config['lang_src'])
     tokenizer_tgt = get_or_build_tokenizer3(config, model_folder, ds_raw, config['lang_tgt'])
-    print(tokenizer_tgt)
 
     # keep 90% for training and 10% for validation
     train_ds_size = int(0.9 * len(ds_raw))
@@ -183,3 +207,26 @@ def get_ds3(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
     val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
 
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
+
+
+def get_testing_ds3(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:
+
+    # build tokenizers
+    tokenizer_src = get_tokenizer3(config, model_folder, config['lang_src'])
+    tokenizer_tgt = get_tokenizer3(config, model_folder, config['lang_tgt'])
+
+    # keep 90% for training and 10% for validation
+    label = ""
+    if isinstance(sentence, int) or sentence.isdigit():
+        id = int(sentence)
+        ds = load_dataset(
+            "csv",
+            data_files=f"custom_datasets/{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}/dataset.csv",
+            sep="|",
+            split='all')
+        ds = Dataset3(ds, tokenizer_src, tokenizer_tgt,
+                      config['lang_src'], config['lang_tgt'], config['seq_len'])
+        sentence = ds[id]['src_text']
+        label = ds[id]["tgt_text"]
+
+    return sentence, label, tokenizer_src, tokenizer_tgt
