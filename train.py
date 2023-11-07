@@ -17,7 +17,7 @@ from tqdm import tqdm
 from dataset1 import get_ds1, casual_mask
 from dataset2 import get_ds2
 from dataset3 import get_ds3
-from dataset6 import get_ds6
+from dataset6 import get_ds6, Dataset6
 
 from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path
 from config import get_console_width, get_device
@@ -473,18 +473,19 @@ def train_model6(config: dict):
     tokenizer_tgt = None
     train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index = get_ds6(
         config, model_folder)
-    model = build_model6(config, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index).to(device)
+    transformer = build_model6(config, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index).to(device)
 
     # Tensorboard
     writer = SummaryWriter(get_model_folder(config) + "/" + config['experiment_name'])
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=config['lr'])
+    optimizer = torch.optim.Adam(transformer.parameters(), lr=config['lr'])
 
     total_loss = 0
     initial_epoch = 0
     global_step = 0
 
-    model, initial_epoch, optimizer, global_step = reload_model(config, model, optimizer, initial_epoch, global_step)
+    transformer, initial_epoch, optimizer, global_step = reload_model(
+        config, transformer, optimizer, initial_epoch, global_step)
     # loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_tgt.token_to_id(PAD), reduction='none')
     loss_fn = nn.CrossEntropyLoss(ignore_index=tgt_to_index[PAD], reduction='none')
 
@@ -492,7 +493,7 @@ def train_model6(config: dict):
         if (device == 'cuda'):
             torch.cuda.empty_cache()
 
-        model.train()  # moved inside for run_validation at each step
+        transformer.train()  # moved inside for run_validation at each step
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
         for batch in batch_iterator:
 
@@ -503,8 +504,8 @@ def train_model6(config: dict):
             #     for batch_num, batch in enumerate(iterator):
 
             eng_batch, kn_batch = batch
-            encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = create_masks(
-                eng_batch, kn_batch)
+            encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
+                eng_batch, kn_batch, config['seq_len'])
             optimizer.zero_grad()
             kn_predictions = transformer(eng_batch,
                                          kn_batch,
@@ -516,7 +517,7 @@ def train_model6(config: dict):
                                          dec_start_token=True,
                                          dec_end_token=True)
             labels = transformer.decoder.sentence_embedding.batch_tokenize(kn_batch, start_token=False, end_token=True)
-            loss = loss_fn(kn_predictions.view(-1, kn_vocab_size).to(device), labels.view(-1).to(device)).to(device)
+            loss = loss_fn(kn_predictions.view(-1, tgt_vocab_size).to(device), labels.view(-1).to(device)).to(device)
             valid_indicies = torch.where(labels.view(-1) == tgt_to_index[PAD], False, True)
             loss = loss.sum() / valid_indicies.sum()
             loss.backward()
@@ -536,8 +537,7 @@ def train_model6(config: dict):
             #     print(f"Kannada Prediction: {predicted_sentence}")
 
         # Run validation at the end of each epoch
-        validate_model6(model, val_dataloader, tokenizer_src, tokenizer_tgt,
-                        config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+        # validate_model6(transformer, val_dataloader, tokenizer_src, tokenizer_tgt, config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Save the model at the end of every epoch
         save_model(model, optimizer, epoch, global_step)
@@ -553,7 +553,7 @@ def validate_model6(transformer: Transformer6, validation_ds: DataLoader, tokeni
         kn_sentence = ("",)
         eng_sentence = ("should we go to the mall?",)
         for word_counter in range(max_sequence_length):
-            encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = create_masks(
+            encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
                 eng_sentence, kn_sentence)
             predictions = transformer(eng_sentence,
                                       kn_sentence,
