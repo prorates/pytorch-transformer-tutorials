@@ -31,6 +31,9 @@ The source code is based on the official pytorch Transformer. Code modified just
 This is based on the following [video](https://www.youtube.com/playlist?list=PLTl9hO2Oobd97qfWC40gOSU8C0iu0m2l4)
 The code is original code is available [here](https://github.com/ajhalthor/Transformer-Neural-Network)
 
+## Model 7
+
+See [video](https://youtu.be/9uw3F6rndnA)
 
 ## Size requirements
 

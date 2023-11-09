@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import math
+from torch import Tensor
 
 # Layer normalization. Minute 14:00. Each sentence is made of many words
 # For each sentence compute the mean and variance for each item/sentence
@@ -20,7 +21,7 @@ class LayerNormalization(nn.Module):
         # JEB: Need to undertand why bias is set to 0 and alpha to 1
         self.bias = nn.Parameter(torch.zeros(features))
 
-    def forward(self, x):
+    def forward(self, x) -> Tensor:
         # usually the mean cancels the dimension to which it is applied
         # x: (batch, seq_len, hidden_size)
         # Keep the dimension for broadcasting
@@ -40,7 +41,7 @@ class FeedForwardBlock(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.linear_2 = nn.Linear(d_ff, d_model)  # W2 and B2
 
-    def forward(self, x):
+    def forward(self, x) -> Tensor:
         # (Batch, Seq_Len, d_model) --> (Batch, Seql_Len, d_ff) --> (Batch, Seq_Len, d_model)
         return self.linear_2(self.dropout(torch.relu(self.linear_1(x))))
 
@@ -55,7 +56,7 @@ class InputEmbeddings(nn.Module):
         # pytorch already provide with a layer mapping between a number and vector of size 512 (3:50)
         self.embedding = nn.Embedding(vocab_size, d_model)
 
-    def forward(self, x):
+    def forward(self, x) -> Tensor:
         # kind of a dictionary. embedding maps number to the same vector every time.
         # The vector is learned by the model.
         # see 3.4 of the paper
@@ -93,7 +94,7 @@ class PositionalEncoding(nn.Module):
         # we want the tensor to be saved with the model but not as parameter
         self.register_buffer('pe', pe)
 
-    def forward(self, x):
+    def forward(self, x) -> Tensor:
         # we need to the positional encoding to every word in the sentence
         # that self.pe is fixed and does not need to be learned, hence requires_grad set to False
         x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False)
@@ -107,7 +108,7 @@ class ResidualConnection(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.norm = LayerNormalization(features)
 
-    def forward(self, x, sublayer):
+    def forward(self, x, sublayer) -> Tensor:
         # Defintion of add and norm
         # We apply the norm and then the sublyaer.
         # The paper seems to apply the sublayer and then the normalization
@@ -160,7 +161,7 @@ class MultiHeadAttentionBlock(nn.Module):
         # We return a tuple....attention_scores is mainly used for visualizing
         return (attention_scores @ value), attention_scores
 
-    def forward(self, q, k, v, mask):
+    def forward(self, q, k, v, mask) -> Tensor:
         # mask avoid that some word interact with some other workds
         # we need to put a value very small to the matrix before we apply
         # the soft max. e to the power of infinity will be very small.
@@ -195,7 +196,7 @@ class EncoderBlock(nn.Module):
         self.residual_connections = nn.ModuleList([ResidualConnection(features, dropout) for _ in range(2)])
 
     # src_mask is hiding the padding words
-    def forward(self, x, src_mask):
+    def forward(self, x, src_mask) -> Tensor:
         # query, key, value are the same
         # this invokes the forward function of the MultiHeadAttention
         x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, src_mask))
@@ -211,7 +212,7 @@ class Encoder(nn.Module):
         self.layers = layers
         self.norm = LayerNormalization(features)
 
-    def forward(self, x, mask):
+    def forward(self, x, mask) -> Tensor:
         for layer in self.layers:
             # The ouput of the previous layer is the input for the next layer
             # See the forward method of the EncoderBlock
@@ -230,7 +231,7 @@ class DecoderBlock(nn.Module):
         self.residual_connections = nn.ModuleList([ResidualConnection(features, dropout) for _ in range(3)])
 
     # src_mask is hiding the padding words
-    def forward(self, x, encoder_ouput, src_mask, tgt_mask):
+    def forward(self, x, encoder_ouput, src_mask, tgt_mask) -> Tensor:
         # query, key, value are the same
         # this invokes the forward function of the MultiHeadAttention
         # x (decoder side) is used for q, k and v
@@ -250,7 +251,7 @@ class Decoder(nn.Module):
         self.layers = layers
         self.norm = LayerNormalization(features)
 
-    def forward(self, x, encoder_output, src_mask, tgt_mask):
+    def forward(self, x, encoder_output, src_mask, tgt_mask) -> Tensor:
         for layer in self.layers:
             # The ouput of the previous layer is the input for the next layer
             # See the forward method of the DecoderBlock
@@ -265,7 +266,7 @@ class ProjectionLayer(nn.Module):
         super().__init__()
         self.proj = nn.Linear(d_model, vocab_size)
 
-    def forward(self, x):
+    def forward(self, x) -> Tensor:
         # (Batch, Seq_Len, d_model) --> (Batch, Seq_Len, Vocab_Size)
         # JEB: For some reasons log_softmax has been removed. This needs to be studied
         # return torch.log_softmax(self.proj(x), dim=-1)
@@ -286,19 +287,19 @@ class Transformer1(nn.Module):
         self.projection_layer = projection_layer
 
     # during inference we can reuse the output of the decoder.
-    def encode(self, src, src_mask: torch.Tensor):
+    def encode(self, src, src_mask: Tensor) -> Tensor:
         # (batch, seq_len, d_model)
         src = self.src_embed(src)
         src = self.src_pos(src)
         return self.encoder(src, src_mask)
 
-    def decode(self, encoder_output: torch.Tensor, src_mask: torch.Tensor, tgt: torch.Tensor, tgt_mask: torch.Tensor):
+    def decode(self, encoder_output: Tensor, src_mask: Tensor, tgt: Tensor, tgt_mask: Tensor) -> Tensor:
         # (batch, seq_len, d_model)
         tgt = self.tgt_embed(tgt)
         tgt = self.tgt_pos(tgt)
         return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
 
-    def project(self, x):
+    def project(self, x) -> Tensor:
         # (batch, seq_len, vocab_size)
         return self.projection_layer(x)
 

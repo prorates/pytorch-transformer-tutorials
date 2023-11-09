@@ -57,7 +57,7 @@ class Dataset1(Dataset):
         enc_num_padding_tokens = self.seq_len - len(enc_input_tokens) - 2
 
         # minus one because we add start and end
-        # We will only add <s>, and </s> only on the label
+        # We will only add <sos>, and <eos> only on the label
         dec_num_padding_tokens = self.seq_len - len(dec_input_tokens) - 1
 
         # Make sure the number of padding tokens is not negative. If it is, the sentence is too long
@@ -76,6 +76,7 @@ class Dataset1(Dataset):
         )
 
         # Add SOS to decoder input
+        # The input of the decoder will include the start_token but not the end_token
         decoder_input = torch.cat(
             [
                 self.sos_token,
@@ -86,6 +87,7 @@ class Dataset1(Dataset):
         )
 
         # Add EOS to label
+        # The ouput of the decoder will not include the start_token but will include the end_token
         label = torch.cat(
             [
                 torch.tensor(dec_input_tokens, dtype=torch.int64),
@@ -101,14 +103,14 @@ class Dataset1(Dataset):
         assert label.size(0) == self.seq_len
 
         return {
-            "encoder_input": encoder_input,  # (seq_len)
-            "decoder_input": decoder_input,  # (seq_len)
-            # (1, 1, Seq_Len) # padding mask should not be used in self attention
+            "encoder_input": encoder_input,  # (SeqLen)
+            "decoder_input": decoder_input,  # (SeqLen)
+            # (1, 1, SeqLen) # padding mask should not be used in self attention
             "encoder_mask": (encoder_input != self.pad_token).unsqueeze(0).unsqueeze(0).int(),
             # (1, SeqLen) & (1, SeqLen, SeqLen)
             # JEB: Be carreful. Have to unsqueeze
             "decoder_mask": (decoder_input != self.pad_token).unsqueeze(0).int() & casual_mask(decoder_input.size(0)),
-            "label": label,  # (seq_len)
+            "label": label,  # (SeqLen)
             "src_text": src_text,
             "tgt_text": tgt_text
         }

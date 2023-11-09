@@ -49,41 +49,68 @@ NEG_INFTY = -1e9
 
 class Dataset6(Dataset):
 
-    def __init__(self, english_sentences, kannada_sentences):
+    def __init__(self, english_sentences: list[str], kannada_sentences: list[str]):
         self.english_sentences = english_sentences
         self.kannada_sentences = kannada_sentences
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.english_sentences)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> Tuple[str, str]:
         return self.english_sentences[idx], self.kannada_sentences[idx]
 
     @staticmethod
-    def create_masks(eng_batch, kn_batch, seq_len):
-        # print(eng_batch)
-        # print(kn_batch)
-        num_sentences = len(eng_batch)
-        look_ahead_mask = torch.full([seq_len, seq_len], True)
-        look_ahead_mask = torch.triu(look_ahead_mask, diagonal=1)
-        encoder_padding_mask = torch.full([num_sentences, seq_len, seq_len], False)
-        decoder_padding_mask_self_attention = torch.full([num_sentences, seq_len, seq_len], False)
-        decoder_padding_mask_cross_attention = torch.full([num_sentences, seq_len, seq_len], False)
+    def create_masks(eng_batch: tuple[str], kn_batch: tuple[str], seq_len: int) -> Tuple[Tensor, Tensor, Tensor]:
+        batch_size = len(eng_batch)
+        # Create a tensor (SeqLen, SeqLen). Cell above the diagonals are set to True, cell bellow to 0.
+        look_ahead_mask = torch.full([seq_len, seq_len], True)  # (SeqLen, SeqLen)
+        look_ahead_mask = torch.triu(look_ahead_mask, diagonal=1)  # (SeqLen, SeqLen)
+        # Create three tensors (bs, SeqLen, SeqLen)
+        # (bs, SeqLen, SeqLen) filled with False
+        encoder_padding_mask = torch.full([batch_size, seq_len, seq_len], False)
+        decoder_padding_mask_self_attention = torch.full(
+            [batch_size, seq_len, seq_len], False)  # (bs, SeqLen, SeqLen) filled with False
+        decoder_padding_mask_cross_attention = torch.full(
+            [batch_size, seq_len, seq_len], False)  # (bs, SeqLen, SeqLen) filled with False
 
-        for idx in range(num_sentences):
+        for idx in range(batch_size):
+            # each sentence is tokenize character per character
+            # Hence the number of token to build the mask is the length of the sentence
             eng_sentence_length, kn_sentence_length = len(eng_batch[idx]), len(kn_batch[idx])
-            eng_chars_to_padding_mask = np.arange(eng_sentence_length + 1, seq_len)
-            kn_chars_to_padding_mask = np.arange(kn_sentence_length + 1, seq_len)
-            encoder_padding_mask[idx, :, eng_chars_to_padding_mask] = True
-            encoder_padding_mask[idx, eng_chars_to_padding_mask, :] = True
+            eng_chars_to_padding_mask = np.arange(eng_sentence_length + 1, seq_len)  # [56,57,....80]
+            kn_chars_to_padding_mask = np.arange(kn_sentence_length + 1, seq_len)  # [21,22,23...80]
+            # keep the top-left quadrant of the matrix. Assign the three other quadant to True
+            encoder_padding_mask[idx, :, eng_chars_to_padding_mask] = True  # set the right columns to True
+            encoder_padding_mask[idx, eng_chars_to_padding_mask, :] = True  # set the bottom rows to True
+            # keep the top-left quadrant of the matrix. Assign the three other quadant to True
+            # set the right columns to True
             decoder_padding_mask_self_attention[idx, :, kn_chars_to_padding_mask] = True
-            decoder_padding_mask_self_attention[idx, kn_chars_to_padding_mask, :] = True
-            decoder_padding_mask_cross_attention[idx, :, eng_chars_to_padding_mask] = True
-            decoder_padding_mask_cross_attention[idx, kn_chars_to_padding_mask, :] = True
+            decoder_padding_mask_self_attention[idx, kn_chars_to_padding_mask, :] = True  # set the bottom rows to True
+            # keep the top-left quadrant of the matrix. Assign the three other quadant to True
+            decoder_padding_mask_cross_attention[idx, :,
+                                                 eng_chars_to_padding_mask] = True  # set the right columns to True
+            decoder_padding_mask_cross_attention[idx, kn_chars_to_padding_mask, :] = True  # set the bottom rows to True
 
-        encoder_self_attention_mask = torch.where(encoder_padding_mask, NEG_INFTY, 0)
-        decoder_self_attention_mask = torch.where(look_ahead_mask + decoder_padding_mask_self_attention, NEG_INFTY, 0)
-        decoder_cross_attention_mask = torch.where(decoder_padding_mask_cross_attention, NEG_INFTY, 0)
+        # The sensor has the shape (bs, SeqLen, SeqLen)
+        # In each element/matrix of the batch, (SeqLen, SeqLen matrix the top-left quadrant is set to 0 and the other 3 quadrant to -inf
+        # In each element/matrix of the batch, the "size of the quadrant" in each matrix dependent on the length of the src sentence.
+        encoder_self_attention_mask = torch.where(encoder_padding_mask, NEG_INFTY, 0)  # (bs, SeqLen, SeqLen)
+
+        # The sensor has the shape (bs, SeqLen, SeqLen)
+        # In each element/matrix of the batch, (SeqLen, SeqLen matrix the top-left quadrant is set to 0 and the other 3 quadrant to -inf
+        # In each element/matrix of the batch, the "size of the quadrant" in each matrix dependent on the length of the tgt sentence.
+        # Finally any cell above the diagonal will be set to -inf and the one bellow to 0
+        # JEB: Understand the +, looks like on each cell bellow the diagonal mix between 0 (int) and bolean (False)
+        decoder_self_attention_mask = torch.where(
+            look_ahead_mask + decoder_padding_mask_self_attention, NEG_INFTY, 0)  # (bs, SeqLen, SeqLen)
+        # JEB: Seems to be working
+        # print(decoder_self_attention_mask[0])
+
+        # The sensor has the shape (bs, SeqLen, SeqLen)
+        # In each element/matrix of the batch, (SeqLen, SeqLen matrix the top-left quadrant is set to 0 and the other 3 quadrant to -inf
+        # In each element/matrix of the batch, the "size of the quadrant" in each matrix dependent on the length of the tgt sentence.
+        decoder_cross_attention_mask = torch.where(
+            decoder_padding_mask_cross_attention, NEG_INFTY, 0)  # (bs, SeqLen, SeqLen)
         return encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask
 
 

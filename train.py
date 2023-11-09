@@ -503,6 +503,7 @@ def train_model6(config: dict):
             #     iterator = iter(train_loader)
             #     for batch_num, batch in enumerate(iterator):
 
+            # eng_batch: tuple[str], kn_batch: tuple[str]
             eng_batch, kn_batch = batch
             encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
                 eng_batch, kn_batch, config['seq_len'])
@@ -512,10 +513,10 @@ def train_model6(config: dict):
                                          encoder_self_attention_mask.to(device),
                                          decoder_self_attention_mask.to(device),
                                          decoder_cross_attention_mask.to(device),
-                                         enc_start_token=False,
-                                         enc_end_token=False,
-                                         dec_start_token=True,
-                                         dec_end_token=True)
+                                         enc_start_token=False,  # During training, model6 does not add sos to encoder input
+                                         enc_end_token=False,  # During training, model6 does not add sos to encoder input
+                                         dec_start_token=True,  # During training, model6 DOES add sos to decoder input
+                                         dec_end_token=True)  # During training, model6 DOES add eos to decoder input
             labels = transformer.decoder.sentence_embedding.batch_tokenize(kn_batch, start_token=False, end_token=True)
             loss = loss_fn(kn_predictions.view(-1, tgt_vocab_size).to(device), labels.view(-1).to(device)).to(device)
 
@@ -550,16 +551,16 @@ def train_model6(config: dict):
         save_model(transformer, optimizer, epoch, global_step)
 
 
-def validate_model6(transformer: Transformer6, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
+def validate_model6(transformer: Transformer6, validation_ds: DataLoader, src_to_index: dict, tgt_to_inddex: dict,
                     max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
-    model.eval()
+    transformer.eval()
     count = 0
 
     if True:
         transformer.eval()
-        kn_sentence = ("",)
-        eng_sentence = ("should we go to the mall?",)
-        for word_counter in range(max_sequence_length):
+        kn_sentence: tuple[str] = ("",)
+        eng_sentence: tuple[str] = ("should we go to the mall?",)
+        for word_counter in range(max_len):
             encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
                 eng_sentence, kn_sentence)
             predictions = transformer(eng_sentence,
@@ -567,15 +568,15 @@ def validate_model6(transformer: Transformer6, validation_ds: DataLoader, tokeni
                                       encoder_self_attention_mask.to(device),
                                       decoder_self_attention_mask.to(device),
                                       decoder_cross_attention_mask.to(device),
-                                      enc_start_token=False,
-                                      enc_end_token=False,
-                                      dec_start_token=True,
-                                      dec_end_token=False)
+                                      enc_start_token=False,  # During validation, model6 does NOT add sos to encoder input
+                                      enc_end_token=False,  # During validation, model6 does NOT add sos to encoder input
+                                      dec_start_token=True,  # During validation, model6 DOES add sos to decoder input
+                                      dec_end_token=False)  # During validation, model6 does NOT add eos to decoder input
             next_token_prob_distribution = predictions[0][word_counter]  # not actual probs
             next_token_index = torch.argmax(next_token_prob_distribution).item()
             next_token = index_to_kannada[next_token_index]
             kn_sentence = (kn_sentence[0] + next_token, )
-            if next_token == END_TOKEN:
+            if next_token == EOS:
                 break
 
         print(f"Evaluation translation (should we go to the mall?) : {kn_sentence}")
