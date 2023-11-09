@@ -471,8 +471,7 @@ def train_model6(config: dict):
 
     tokenizer_src = None
     tokenizer_tgt = None
-    train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index = get_ds6(
-        config, model_folder)
+    train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index , index_to_tgt = get_ds6(config, model_folder)
     transformer = build_model6(config, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index).to(device)
 
     # Tensorboard
@@ -489,19 +488,15 @@ def train_model6(config: dict):
     # loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_tgt.token_to_id(PAD), reduction='none')
     loss_fn = nn.CrossEntropyLoss(ignore_index=tgt_to_index[PAD], reduction='none')
 
+    console_width = get_console_width()
+
     for epoch in range(initial_epoch, config['num_epochs']):
         if (device == 'cuda'):
             torch.cuda.empty_cache()
 
         transformer.train()  # moved inside for run_validation at each step
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
-        for batch in batch_iterator:
-
-            # ORG
-            # for epoch in range(num_epochs):
-            #     print(f"Epoch {epoch}")
-            #     iterator = iter(train_loader)
-            #     for batch_num, batch in enumerate(iterator):
+        for batch_num, batch in enumerate(batch_iterator):
 
             # eng_batch: tuple[str], kn_batch: tuple[str]
             eng_batch, kn_batch = batch
@@ -522,7 +517,7 @@ def train_model6(config: dict):
 
             valid_indicies = torch.where(labels.view(-1) == tgt_to_index[PAD], False, True)
             loss = loss.sum() / valid_indicies.sum()
-            batch_iterator.set_postfix({"Loss": f"{loss:6.3f}"})
+            batch_iterator.set_postfix({"Loss": f"{loss.item():6.3f}"})
 
             # Log of loss
             writer.add_scalar('train loss', loss, global_step)
@@ -532,17 +527,18 @@ def train_model6(config: dict):
             optimizer.step()
 
             # train_losses.append(loss.item())
-            # if batch_num % 100 == 0:
-            #     print(f"Iteration {batch_num} : {loss.item()}")
-            #     print(f"English: {eng_batch[0]}")
-            #     print(f"Kannada Translation: {kn_batch[0]}")
-            #     kn_sentence_predicted = torch.argmax(kn_predictions[0], axis=1)
-            #     predicted_sentence = ""
-            #     for idx in kn_sentence_predicted:
-            #         if idx == kannada_to_index[END_TOKEN]:
-            #             break
-            #         predicted_sentence += index_to_kannada[idx.item()]
-            #     print(f"Kannada Prediction: {predicted_sentence}")
+            if batch_num % 100 == 0:
+                batch_iterator.write('-' * console_width)
+                batch_iterator.write(f"{f'Source: ':>15}{eng_batch[0]}")
+                batch_iterator.write(f"{f'Target: ':>15}{kn_batch[0]}")
+                kn_sentence_predicted = torch.argmax(kn_predictions[0], axis=1)
+                predicted_sentence = ""
+                for idx in kn_sentence_predicted:
+                    if idx == tgt_to_index[EOS]:
+                        break
+                    predicted_sentence += index_to_tgt[idx.item()]
+                batch_iterator.write(f"{f'Prediction: ':>15}{predicted_sentence}")
+                batch_iterator.write('-' * console_width)
 
         # Run validation at the end of each epoch
         # validate_model6(transformer, val_dataloader, tokenizer_src, tokenizer_tgt, config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)

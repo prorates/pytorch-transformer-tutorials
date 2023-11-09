@@ -125,7 +125,7 @@ def is_valid_length(sentence, max_sequence_length):
     return len(list(sentence)) < (max_sequence_length - 1)  # need to re-add the end token so leaving 1 space
 
 
-def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, int, int, dict, dict]:
+def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, int, int, dict, dict, dict]:
 
     index_to_kannada = {k: v for k, v in enumerate(kannada_vocabulary)}
     kannada_to_index = {v: k for k, v in enumerate(kannada_vocabulary)}
@@ -187,7 +187,7 @@ def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, in
     train_dataloader = DataLoader(dataset, config['batch_size'])
 
     # return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
-    return train_dataloader, None, len(english_vocabulary), len(kannada_vocabulary), english_to_index, kannada_to_index
+    return train_dataloader, None, len(english_vocabulary), len(kannada_vocabulary), english_to_index, kannada_to_index, index_to_kannada
 
 
 def get_testing_ds6(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:

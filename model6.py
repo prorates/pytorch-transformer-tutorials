@@ -75,6 +75,7 @@ class SentenceEmbedding(nn.Module):
         tokenized = torch.stack(tokenized_sentences)
         return tokenized.to(get_device())
 
+    # fowards returns a (bs, SeqLen, d_model) tensor
     def forward(self, batched_sentences: tuple[str], start_token: bool, end_token: bool) -> Tensor:  # sentence
         x = self.batch_tokenize(batched_sentences, start_token, end_token)
         x = self.embedding(x)
@@ -92,6 +93,7 @@ class MultiHeadAttention(nn.Module):
         self.qkv_layer = nn.Linear(d_model, 3 * d_model)
         self.linear_layer = nn.Linear(d_model, d_model)
 
+    # fowards returns a (bs, SeqLen, d_model) tensor
     def forward(self, x, mask) -> Tensor:
         batch_size, sequence_length, d_model = x.size()
         qkv = self.qkv_layer(x)
@@ -100,19 +102,23 @@ class MultiHeadAttention(nn.Module):
         q, k, v = qkv.chunk(3, dim=-1)
         values, attention = scaled_dot_product(q, k, v, mask)
         values = values.permute(0, 2, 1, 3).reshape(batch_size, sequence_length, self.num_heads * self.head_dim)
-        out = self.linear_layer(values)
+        out = self.linear_layer(values)  # (bs, SeqLen, d_model)
         return out
 
 
 class LayerNormalization(nn.Module):
     def __init__(self, parameters_shape, eps=1e-5):
         super().__init__()
+        # JEB: Neeed to study. Look like a list with value[d_model]
         self.parameters_shape = parameters_shape
         self.eps = eps
         self.gamma = nn.Parameter(torch.ones(parameters_shape))
         self.beta = nn.Parameter(torch.zeros(parameters_shape))
 
-    def forward(self, inputs) -> Tensor:
+    # fowards returns a (bs, SeqLen, d_model) tensor
+    def forward(self, inputs: Tensor) -> Tensor:
+        # inputs has shape (bs, SeqLen, d_model)
+        # JEB: Need to come back to that dims computation
         dims = [-(i + 1) for i in range(len(self.parameters_shape))]
         mean = inputs.mean(dim=dims, keepdim=True)
         var = ((inputs - mean) ** 2).mean(dim=dims, keepdim=True)
@@ -130,7 +136,9 @@ class PositionwiseFeedForward(nn.Module):
         self.relu = nn.ReLU()
         self.dropout = nn.Dropout(p=drop_prob)
 
+    # fowards returns a (bs, SeqLen, d_model) tensor
     def forward(self, x: Tensor) -> Tensor:
+        # the shape of input x is (bs, SqeqLen, d_model)
         x = self.linear1(x)
         x = self.relu(x)
         x = self.dropout(x)
@@ -148,7 +156,10 @@ class EncoderLayer(nn.Module):
         self.norm2 = LayerNormalization(parameters_shape=[d_model])
         self.dropout2 = nn.Dropout(p=drop_prob)
 
+    # fowards returns a (bs, SeqLen, d_model) Tensor
     def forward(self, x: Tensor, self_attention_mask: Tensor) -> Tensor:
+        # x input Tensor is a (bs, SeqLen, d_model) Tensor
+        # self_attention_mask is a (bs, SeqLen, SeqLen) Tensor
         residual_x = x.clone()
         x = self.attention(x, mask=self_attention_mask)
         x = self.dropout1(x)
@@ -162,6 +173,8 @@ class EncoderLayer(nn.Module):
 
 class SequentialEncoder(nn.Sequential):
     # SequentialEncoder is instantiate with a list of EncoderLayer
+
+    # foward returns a (bs, SeqLen, d_model) tensor
     def forward(self, *inputs) -> Tensor:
         x, self_attention_mask = inputs
         for module in self._modules.values():
@@ -178,7 +191,7 @@ class Encoder(nn.Module):
         self.layers = SequentialEncoder(*[EncoderLayer(d_model, ffn_hidden, num_heads, drop_prob)
                                           for _ in range(num_layers)])
 
-    # (bs, SeqLen, d_model)
+    # forward returns a (bs, SeqLen, d_model) Tensor
     def forward(self, encoder_batched_sentences: tuple[str], self_attention_mask: Tensor, start_token: bool, end_token: bool) -> Tensor:
         # attention_mask shape is (bs, SeqLen, SeqLen)
         x = self.sentence_embedding(encoder_batched_sentences, start_token, end_token)  # (bs, SeqLen, d_model)
@@ -196,7 +209,11 @@ class MultiHeadCrossAttention(nn.Module):
         self.q_layer = nn.Linear(d_model, d_model)
         self.linear_layer = nn.Linear(d_model, d_model)
 
-    def forward(self, x, y, mask: Tensor) -> Tensor:
+    # forward returns a (bs, SeqLen, d_model) Tensor
+    def forward(self, x: Tensor, y: Tensor, mask: Tensor) -> Tensor:
+        # The x shape is (bs, SeqLen, d_model)
+        # The y shape is (bs, SeqLen, d_model)
+        # The mask shape is (bs, SeqLen, SeqLen)
         # in practice, this is the same for both languages...so we can technically combine with normal attention
         batch_size, sequence_length, d_model = x.size()
         kv = self.kv_layer(x)
@@ -228,14 +245,19 @@ class DecoderLayer(nn.Module):
         self.layer_norm3 = LayerNormalization(parameters_shape=[d_model])
         self.dropout3 = nn.Dropout(p=drop_prob)
 
-    def forward(self, x: Tensor, y: Tensor, self_attention_mask: Tensor, cross_attention_mask: Tensor) -> Tensor:
+    # forward returns a (bs, SeqLen, d_model) tensor
+    def forward(self, encoder_out: Tensor, y: Tensor, self_attention_mask: Tensor, cross_attention_mask: Tensor) -> Tensor:
+        # encoder_out shape is (bs,SeqLen, d_model)
+        # y shape is (bs_SeqLen, d_model)
+        # self_attention_mask shape is (bs, SeqLen, SeqLen)
+        # cross_attention_mask shape is (bs, SeqLen, SeqLen)
         _y = y.clone()
         y = self.self_attention(y, mask=self_attention_mask)
         y = self.dropout1(y)
         y = self.layer_norm1(y + _y)
 
         _y = y.clone()
-        y = self.encoder_decoder_attention(x, y, mask=cross_attention_mask)
+        y = self.encoder_decoder_attention(encoder_out, y, mask=cross_attention_mask)
         y = self.dropout2(y)
         y = self.layer_norm2(y + _y)
 
@@ -248,10 +270,12 @@ class DecoderLayer(nn.Module):
 
 class SequentialDecoder(nn.Sequential):
     # SequentialDecoder is instantiate with a list of DecoderLayer
+
+    # foward returns a (bs, SeqLen, d_model) tensor
     def forward(self, *inputs) -> Tensor:
-        x, y, self_attention_mask, cross_attention_mask = inputs
+        encoder_out, y, self_attention_mask, cross_attention_mask = inputs
         for module in self._modules.values():
-            y = module(x, y, self_attention_mask, cross_attention_mask)
+            y = module(encoder_out, y, self_attention_mask, cross_attention_mask)
         return y
 
 
@@ -264,7 +288,7 @@ class Decoder(nn.Module):
         self.layers = SequentialDecoder(
             *[DecoderLayer(d_model, ffn_hidden, num_heads, drop_prob) for _ in range(num_layers)])
 
-    # (bs, SeqLen, d_model)
+    # forward returns a (bs, SeqLen, d_model) Tensor
     def forward(self, encoder_out: Tensor, decoder_batched_sentences: tuple[str], self_attention_mask: Tensor, cross_attention_mask: Tensor, start_token: bool, end_token: bool) -> Tensor:
         # The input of the decoder will include the start_token but not the end_token
         # The ouput of the decoder will not include the start_token but will include the end_token
@@ -288,6 +312,7 @@ class Transformer6(nn.Module):
         self.linear = nn.Linear(d_model, kn_vocab_size)
         self.device = get_device()  # torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
+    # forward returns a (bs, SeqLen, vocab_size) Tensor
     def forward(self,
                 encoder_batched_sentences: tuple[str],
                 decoder_batched_sentences: tuple[str],
