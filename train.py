@@ -469,8 +469,8 @@ def train_model6(config: dict):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    tokenizer_src = None
-    tokenizer_tgt = None
+    # tokenizer_src = None
+    # tokenizer_tgt = None
     train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index , index_to_tgt = get_ds6(config, model_folder)
     transformer = build_model6(config, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index).to(device)
 
@@ -547,7 +547,7 @@ def train_model6(config: dict):
         save_model(transformer, optimizer, epoch, global_step)
 
 
-def validate_model6(transformer: Transformer6, validation_ds: DataLoader, src_to_index: dict, tgt_to_inddex: dict,
+def validate_model6(transformer: Transformer6, validation_ds: DataLoader, src_to_index: dict, tgt_to_index: dict,
                     max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
     transformer.eval()
     count = 0

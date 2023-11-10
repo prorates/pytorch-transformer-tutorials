@@ -7,14 +7,15 @@ from typing import Any
 from typing import Tuple
 
 from datasets import load_dataset
-from tokenizers import Tokenizer
-from tokenizers.models import WordLevel
-from tokenizers.trainers import WordLevelTrainer
-from tokenizers.pre_tokenizers import Whitespace
+from tokenizers import Tokenizer, pre_tokenizers, decoders
+from tokenizers.models import BPE
+from tokenizers.trainers import BpeTrainer
+from tokenizers.pre_tokenizers import ByteLevel, Whitespace
 
 from pathlib import Path
 from config import EOS, SOS, PAD, UNK
 import numpy as np
+import codecs
 
 # Generated this by filtering Appendix code
 
@@ -49,15 +50,15 @@ NEG_INFTY = -1e9
 
 class Dataset6(Dataset):
 
-    def __init__(self, english_sentences: list[str], kannada_sentences: list[str]):
-        self.english_sentences = english_sentences
-        self.kannada_sentences = kannada_sentences
+    def __init__(self, src_sentences: list[str], tgt_sentences: list[str]):
+        self.src_sentences = src_sentences
+        self.tgt_sentences = tgt_sentences
 
     def __len__(self) -> int:
-        return len(self.english_sentences)
+        return len(self.src_sentences)
 
     def __getitem__(self, idx: int) -> Tuple[str, str]:
-        return self.english_sentences[idx], self.kannada_sentences[idx]
+        return self.src_sentences[idx], self.tgt_sentences[idx]
 
     @staticmethod
     def create_masks(eng_batch: tuple[str], kn_batch: tuple[str], seq_len: int) -> Tuple[Tensor, Tensor, Tensor]:
@@ -117,6 +118,7 @@ class Dataset6(Dataset):
 def is_valid_tokens(sentence, vocab):
     for token in list(set(sentence)):
         if token not in vocab:
+            print(bytes(token,"utf-8"))
             return False
     return True
 
@@ -125,54 +127,86 @@ def is_valid_length(sentence, max_sequence_length):
     return len(list(sentence)) < (max_sequence_length - 1)  # need to re-add the end token so leaving 1 space
 
 
+def get_all_sentences6(ds, lang_idx):
+    for item in ds:
+        yield item[lang_idx]
+
+
+def get_or_build_tokenizer6(config: dict, model_folder: str, ds, lang: str) -> Tokenizer:
+    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
+    if not Path.exists(tokenizer_path):
+        tokenizer = Tokenizer(BPE(char_level=True, unk_token=UNK))
+        # tokenizer.pre_tokenizer = ByteLevel(add_prefix_space=False,use_regex=False)
+        # tokenizer.decoder = decoders.ByteLevel()
+        tokenizer.pre_tokenizer = Whitespace()
+        trainer = BpeTrainer(special_tokens=[UNK, PAD, SOS, EOS, ' ', '?', '!'], max_token_length=1, min_frequency=1)
+        lang_idx = 0 if lang == "en" else 1
+        tokenizer.train_from_iterator(get_all_sentences6(ds, lang_idx), trainer=trainer)
+        tokenizer.save(str(tokenizer_path))
+    else:
+        tokenizer = Tokenizer.from_file(str(tokenizer_path))
+    return tokenizer
+
+
+def get_tokenizer6(config: dict, model_folder: str, lang: str) -> Tokenizer:
+    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
+    if not Path.exists(tokenizer_path):
+        print(f"Tokenizer does not exists {tokenizer_path}")
+        raise ValueError(f"{tokenizer_path} Tokenizer does not exist")
+    else:
+        tokenizer = Tokenizer.from_file(str(tokenizer_path))
+    return tokenizer
+
+# def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
+
+
 def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, int, int, dict, dict, dict]:
 
-    index_to_kannada = {k: v for k, v in enumerate(kannada_vocabulary)}
-    kannada_to_index = {v: k for k, v in enumerate(kannada_vocabulary)}
-    index_to_english = {k: v for k, v in enumerate(english_vocabulary)}
-    english_to_index = {v: k for k, v in enumerate(english_vocabulary)}
+    src_file = f"custom_datasets/{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}/{config['lang_src']}.txt"
+    tgt_file = f"custom_datasets/{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}/{config['lang_tgt']}.txt"
 
-    english_file = 'custom_datasets/translate_en_kn/english.txt'  # replace this path with appropriate one
-    kannada_file = 'custom_datasets/translate_en_kn/kannada.txt'  # replace this path with appropriate one
-
-    with open(english_file, 'r') as file:
-        english_sentences = file.readlines()
-    with open(kannada_file, 'r') as file:
-        kannada_sentences = file.readlines()
+    with open(src_file, 'r') as file:
+        src_sentences = file.readlines()
+    with open(tgt_file, 'r') as file:
+        tgt_sentences = file.readlines()
 
     # Limit Number of sentences
     TOTAL_SENTENCES = 200000
-    english_sentences = english_sentences[:TOTAL_SENTENCES]
-    kannada_sentences = kannada_sentences[:TOTAL_SENTENCES]
-    english_sentences = [sentence.rstrip('\n').lower() for sentence in english_sentences]
-    kannada_sentences = [sentence.rstrip('\n') for sentence in kannada_sentences]
+    src_sentences = src_sentences[:TOTAL_SENTENCES]
+    tgt_sentences = tgt_sentences[:TOTAL_SENTENCES]
+    src_sentences = [sentence.rstrip('\n').lower() for sentence in src_sentences]
+    tgt_sentences = [sentence.rstrip('\n') for sentence in tgt_sentences]
 
-    print(english_sentences[:10])
-    print(kannada_sentences[:10])
-
-    PERCENTILE = 97
-    print(f"{PERCENTILE}th percentile length Kannada: {np.percentile([len(x) for x in kannada_sentences], PERCENTILE)}")
-    print(f"{PERCENTILE}th percentile length English: {np.percentile([len(x) for x in english_sentences], PERCENTILE)}")
+    full_ds = Dataset6(src_sentences, tgt_sentences)
+    tokenizer_src = get_or_build_tokenizer6(config, model_folder, full_ds, config['lang_src'])
+    tokenizer_tgt = get_or_build_tokenizer6(config, model_folder, full_ds, config['lang_tgt'])
 
     valid_sentence_indicies = []
-    for index in range(len(kannada_sentences)):
-        kannada_sentence, english_sentence = kannada_sentences[index], english_sentences[index]
-        if is_valid_length(kannada_sentence, config['seq_len']) \
-                and is_valid_length(english_sentence, config['seq_len']) \
-                and is_valid_tokens(kannada_sentence, kannada_vocabulary):
-            valid_sentence_indicies.append(index)
+    for index in range(len(tgt_sentences)):
+        tgt_sentence, src_sentence = tgt_sentences[index], src_sentences[index]
+        if is_valid_length(tgt_sentence, config['seq_len']) \
+                and is_valid_length(src_sentence, config['seq_len']):
+            if is_valid_tokens(tgt_sentence, tokenizer_tgt.get_vocab()) \
+                    and is_valid_tokens(src_sentence, tokenizer_src.get_vocab()):
+                valid_sentence_indicies.append(index)
+            else:
+                # print("Unknwon token")
+                pass
+        else:
+            # print("Invalid length")
+            pass
 
-    print(f"Number of sentences: {len(kannada_sentences)}")
+    print(f"Number of sentences: {len(tgt_sentences)}")
     print(f"Number of valid sentences: {len(valid_sentence_indicies)}")
 
-    kannada_sentences = [kannada_sentences[i] for i in valid_sentence_indicies]
-    english_sentences = [english_sentences[i] for i in valid_sentence_indicies]
+    tgt_sentences = [tgt_sentences[i] for i in valid_sentence_indicies]
+    src_sentences = [src_sentences[i] for i in valid_sentence_indicies]
 
-    print(kannada_sentences[:3])
+    # print(tgt_sentences[:3])
 
-    dataset = Dataset6(english_sentences, kannada_sentences)
-    len(dataset)
-    print(dataset[1])
+    ds_raw = Dataset6(src_sentences, tgt_sentences)
+
+    index_to_tgt = {v: k for i, (k, v) in enumerate(tokenizer_tgt.get_vocab().items())}
 
     # keep 90% for training and 10% for validation
     # train_ds_size = int(0.9 * len(ds_raw))
@@ -184,10 +218,10 @@ def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, in
     # val_ds = Dataset6(val_ds_raw, tokenizer_src, tokenizer_tgt,
     #                   config['lang_src'], config['lang_tgt'], config['seq_len'])
 
-    train_dataloader = DataLoader(dataset, config['batch_size'])
+    train_dataloader = DataLoader(ds_raw, config['batch_size'])
 
     # return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
-    return train_dataloader, None, len(english_vocabulary), len(kannada_vocabulary), english_to_index, kannada_to_index, index_to_kannada
+    return train_dataloader, None, len(tokenizer_src.get_vocab()), len(tokenizer_tgt.get_vocab()), tokenizer_src.get_vocab(), tokenizer_tgt.get_vocab(), index_to_tgt
 
 
 def get_testing_ds6(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:

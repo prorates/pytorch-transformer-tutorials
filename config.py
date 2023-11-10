@@ -22,7 +22,7 @@ def get_config():
         # "datasource": 'opus_books',
         "datasource": 'translate',
         "lang_src": "en",
-        "lang_tgt": "kn",
+        "lang_tgt": "fr",
         "model_basename": "tmodel_",
         "preload": "latest",  # Possible values: None, "02", "latest"
         "tokenizer_file": "tokenizer_{0}",
