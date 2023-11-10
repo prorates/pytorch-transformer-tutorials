@@ -18,7 +18,7 @@ from config import EOS, SOS, PAD, UNK
 
 class Dataset1(Dataset):
 
-    def __init__(self, ds, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
+    def __init__(self, ds: Dataset, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
                  src_lang: str, tgt_lang: str, seq_len: int) -> None:
         super().__init__()
 

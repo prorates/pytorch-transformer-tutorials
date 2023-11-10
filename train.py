@@ -31,43 +31,6 @@ from model5 import Transformer5, build_transformer5
 from model6 import Transformer6, build_transformer6
 
 
-def greedy_decode(model: Transformer1, source, source_mask, tokenizer_src: Tokenizer,
-                  tokenizer_tgt: Tokenizer, max_len: int, device):
-    sos_idx = tokenizer_tgt.token_to_id(SOS)
-    eos_idx = tokenizer_tgt.token_to_id(EOS)
-
-    # Precompute the encoder output and reuse it for every step
-    encoder_output = model.encode(source, source_mask)
-
-    # Initialize the decoder input with the sos token
-    # two dimensions. One for batch one for the decoder input
-    decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(device)
-    while True:
-        if decoder_input.size(1) == max_len:
-            break
-
-        # Build mask for the target (decoder input)
-        decoder_mask = casual_mask(decoder_input.size(1)).type_as(source_mask).to(device)
-
-        # calculate the output of the decoder
-        out = model.decode(encoder_output, source_mask, decoder_input, decoder_mask)
-
-        # Get the next token
-        prob = model.project(out[:, -1])
-
-        # Select the token with the max probability (because it is a greedy search)
-        _, next_word = torch.max(prob, dim=1)
-        decoder_input = torch.cat(
-            [decoder_input, torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(device)], dim=1
-        )
-
-        # break if we predict the end of sentence token
-        if next_word == eos_idx:
-            break
-
-    return decoder_input.squeeze(0)
-
-
 def collect_training_metrics(writer, predicted, expected, global_step):
     if writer:
         # Evaluate the character error rate
@@ -173,7 +136,9 @@ def validate_model1(model: Transformer1, validation_ds: DataLoader, tokenizer_sr
 
             assert encoder_input.size(0) == 1, "Batch size must be 1 for validation"
 
-            model_out = greedy_decode(model, encoder_input, encoder_mask, tokenizer_src, tokenizer_tgt, max_len, device)
+            eos_idx = tokenizer_tgt.token_to_id(EOS)
+            sos_idx = tokenizer_tgt.token_to_id(SOS)
+            model_out = model.greedy_decode(model, encoder_input, encoder_mask, sos_idx, eos_idx, max_len, device)
 
             source_text = batch['src_text'][0]
             target_text = batch['tgt_text'][0]
@@ -185,9 +150,9 @@ def validate_model1(model: Transformer1, validation_ds: DataLoader, tokenizer_sr
 
             # Print the message to the console without interfering with the progress bar
             print_msg('-' * console_width)
-            print_msg(f"{f'SOURCE: ':>12}{source_text}")
-            print_msg(f"{f'TARGET: ':>12}{target_text}")
-            print_msg(f"{f'PREDICTED: ':>12}{model_out_text}")
+            print_msg(f"{f'Source: ':>15}{source_text}")
+            print_msg(f"{f'Target: ':>15}{target_text}")
+            print_msg(f"{f'Prediction: ':>15}{model_out_text}")
 
             if count == num_examples:
                 print_msg('-' * console_width)
@@ -469,9 +434,8 @@ def train_model6(config: dict):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    # tokenizer_src = None
-    # tokenizer_tgt = None
-    train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index , index_to_tgt = get_ds6(config, model_folder)
+    train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index, index_to_tgt = get_ds6(
+        config, model_folder)
     transformer = build_model6(config, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index).to(device)
 
     # Tensorboard
@@ -498,24 +462,26 @@ def train_model6(config: dict):
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
         for batch_num, batch in enumerate(batch_iterator):
 
-            # eng_batch: tuple[str], kn_batch: tuple[str]
-            eng_batch, kn_batch = batch
+            # src_batched_sentences: tuple[str], tgt_batched_sentences: tuple[str]
+            src_batched_sentences, tgt_batched_sentences = batch
             encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
-                eng_batch, kn_batch, config['seq_len'])
+                src_batched_sentences, tgt_batched_sentences, config['seq_len'])
             optimizer.zero_grad()
-            kn_predictions = transformer(eng_batch,
-                                         kn_batch,
-                                         encoder_self_attention_mask.to(device),
-                                         decoder_self_attention_mask.to(device),
-                                         decoder_cross_attention_mask.to(device),
-                                         enc_start_token=False,  # During training, model6 does not add sos to encoder input
-                                         enc_end_token=False,  # During training, model6 does not add sos to encoder input
-                                         dec_start_token=True,  # During training, model6 DOES add sos to decoder input
-                                         dec_end_token=True)  # During training, model6 DOES add eos to decoder input
-            labels = transformer.decoder.sentence_embedding.batch_tokenize(kn_batch, start_token=False, end_token=True)
-            loss = loss_fn(kn_predictions.view(-1, tgt_vocab_size).to(device), labels.view(-1).to(device)).to(device)
+            predicted_tokens = transformer(src_batched_sentences,
+                                           tgt_batched_sentences,
+                                           encoder_self_attention_mask.to(device),
+                                           decoder_self_attention_mask.to(device),
+                                           decoder_cross_attention_mask.to(device),
+                                           enc_start_token=False,  # During training, model6 does not add sos to encoder input
+                                           enc_end_token=False,  # During training, model6 does not add sos to encoder input
+                                           dec_start_token=True,  # During training, model6 DOES add sos to decoder input
+                                           dec_end_token=True)  # During training, model6 DOES add eos to decoder input
+            expected_tokens = transformer.decoder.sentence_embedding.batch_tokenize(
+                tgt_batched_sentences, start_token=False, end_token=True)
+            loss = loss_fn(predicted_tokens.view(-1, tgt_vocab_size).to(device),
+                           expected_tokens.view(-1).to(device)).to(device)
 
-            valid_indicies = torch.where(labels.view(-1) == tgt_to_index[PAD], False, True)
+            valid_indicies = torch.where(expected_tokens.view(-1) == tgt_to_index[PAD], False, True)
             loss = loss.sum() / valid_indicies.sum()
             batch_iterator.set_postfix({"Loss": f"{loss.item():6.3f}"})
 
@@ -527,11 +493,11 @@ def train_model6(config: dict):
             optimizer.step()
 
             # train_losses.append(loss.item())
-            if batch_num % 100 == 0:
+            if (batch_num > 0) and (batch_num % 100 == 0):
                 batch_iterator.write('-' * console_width)
-                batch_iterator.write(f"{f'Source: ':>15}{eng_batch[0]}")
-                batch_iterator.write(f"{f'Target: ':>15}{kn_batch[0]}")
-                kn_sentence_predicted = torch.argmax(kn_predictions[0], axis=1)
+                batch_iterator.write(f"{f'Source: ':>15}{src_batched_sentences[0]}")
+                batch_iterator.write(f"{f'Target: ':>15}{tgt_batched_sentences[0]}")
+                kn_sentence_predicted = torch.argmax(predicted_tokens[0], axis=1)
                 predicted_sentence = ""
                 for idx in kn_sentence_predicted:
                     if idx == tgt_to_index[EOS]:
@@ -540,43 +506,56 @@ def train_model6(config: dict):
                 batch_iterator.write(f"{f'Prediction: ':>15}{predicted_sentence}")
                 batch_iterator.write('-' * console_width)
 
+            # if batch_num % 20 == 0:
+            #     validate_model6(transformer, val_dataloader, index_to_tgt,
+            #                     config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+
         # Run validation at the end of each epoch
-        # validate_model6(transformer, val_dataloader, tokenizer_src, tokenizer_tgt, config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+        validate_model6(transformer, val_dataloader, index_to_tgt,
+                        config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Save the model at the end of every epoch
         save_model(transformer, optimizer, epoch, global_step)
 
 
-def validate_model6(transformer: Transformer6, validation_ds: DataLoader, src_to_index: dict, tgt_to_index: dict,
+def validate_model6(transformer: Transformer6, validation_ds: DataLoader, index_to_tgt: dict,
                     max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
+
     transformer.eval()
     count = 0
 
-    if True:
-        transformer.eval()
-        kn_sentence: tuple[str] = ("",)
-        eng_sentence: tuple[str] = ("should we go to the mall?",)
-        for word_counter in range(max_len):
-            encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
-                eng_sentence, kn_sentence)
-            predictions = transformer(eng_sentence,
-                                      kn_sentence,
-                                      encoder_self_attention_mask.to(device),
-                                      decoder_self_attention_mask.to(device),
-                                      decoder_cross_attention_mask.to(device),
-                                      enc_start_token=False,  # During validation, model6 does NOT add sos to encoder input
-                                      enc_end_token=False,  # During validation, model6 does NOT add sos to encoder input
-                                      dec_start_token=True,  # During validation, model6 DOES add sos to decoder input
-                                      dec_end_token=False)  # During validation, model6 does NOT add eos to decoder input
-            next_token_prob_distribution = predictions[0][word_counter]  # not actual probs
-            next_token_index = torch.argmax(next_token_prob_distribution).item()
-            next_token = index_to_kannada[next_token_index]
-            kn_sentence = (kn_sentence[0] + next_token, )
-            if next_token == EOS:
-                break
+    source_texts = []
+    expected = []
+    predicted = []
 
-        print(f"Evaluation translation (should we go to the mall?) : {kn_sentence}")
-        print("-------------------------------------------")
+    console_width = get_console_width()
+
+    with torch.no_grad():
+        for batch in validation_ds:
+            count += 1
+
+            # src_batched_sentences: tuple[str], tgt_batched_sentences: tuple[str]
+            src_batched_sentences, expected_batched_sentences = batch
+            assert len(src_batched_sentences) == 1, "Batch size must be 1 for validation"
+
+            predicated_batched_sentences = transformer.greedy_decode(
+                src_batched_sentences, max_len, index_to_tgt, device)
+
+            source_texts.append(src_batched_sentences[0])
+            expected.append(expected_batched_sentences[0])
+            predicted.append(predicated_batched_sentences[0])
+
+            # Print the message to the console without interfering with the progress bar
+            print_msg('-' * console_width)
+            print_msg(f"{f'Source: ':>15}{src_batched_sentences[0]}")
+            print_msg(f"{f'Target: ':>15}{expected_batched_sentences[0]}")
+            print_msg(f"{f'Prediction: ':>15}{predicated_batched_sentences[0]}")
+
+            if count == num_examples:
+                print_msg('-' * console_width)
+                break
+    if writer:
+        collect_training_metrics(writer, predicted, expected, global_step)
 
 
 if __name__ == '__main__':

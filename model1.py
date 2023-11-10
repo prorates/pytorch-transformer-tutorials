@@ -303,6 +303,45 @@ class Transformer1(nn.Module):
         # (batch, seq_len, vocab_size)
         return self.projection_layer(x)
 
+    def greedy_decode(self, source, source_mask: Tensor, eos_idx: int,
+                      sos_idx: int, max_len: int, device):
+
+        # Precompute the encoder output and reuse it for every step
+        # JEB: source at point is not a batch hence the unsqueeze(0).
+        # JEB: not sure the is the only place it is needeed
+        encoder_output = self.encode(source.unsqueeze(0), source_mask)
+        # JEB encoder_output = self.encode(source, source_mask)
+
+        # Initialize the decoder input with the sos token
+        decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(device)
+
+        # Generate the translation word by word
+        while decoder_input.size(1) < max_len:
+            # build mask for target and calculate output
+            decoder_mask = translation_mask(decoder_input.size(1)).type_as(source_mask).to(device)
+            # JEB decoder_mask = casual_mask(decoder_input.size(1)).type_as(source_mask).to(device)
+
+            # calculate the output of the decoder
+            out = self.decode(encoder_output, source_mask, decoder_input, decoder_mask)
+
+            # project next token
+            prob = self.project(out[:, -1])
+
+            # Select the token with the max probability (because it is a greedy search)
+            _, next_word = torch.max(prob, dim=1)
+            decoder_input = torch.cat(
+                [decoder_input, torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(device)], dim=1
+            )
+
+            # print the translated word
+            # print(f"{tokenizer_tgt.decode([next_word.item()])}", end=' ')
+
+            # break if we predict the end of sentence token
+            if next_word == eos_idx:
+                break
+
+        return decoder_input[0].tolist()
+
 
 def build_transformer1(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int,
                        d_model: int = 512, N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048) -> Transformer1:

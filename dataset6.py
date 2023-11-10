@@ -48,7 +48,7 @@ english_vocabulary = [START_TOKEN, ' ', '!', '"', '#', '$', '%', '&', "'", '(', 
 NEG_INFTY = -1e9
 
 
-class Dataset6(Dataset):
+class Dataset6Tmp(Dataset):
 
     def __init__(self, src_sentences: list[str], tgt_sentences: list[str]):
         self.src_sentences = src_sentences
@@ -59,6 +59,48 @@ class Dataset6(Dataset):
 
     def __getitem__(self, idx: int) -> Tuple[str, str]:
         return self.src_sentences[idx], self.tgt_sentences[idx]
+
+    def is_valid_tokens(self, sentence: str, vocab: dict):
+        for token in list(set(sentence)):
+            if token not in vocab:
+                print(bytes(token, "utf-8"))
+                return False
+        return True
+
+    def is_valid_length(self, sentence: str, max_sequence_length: int):
+        return len(list(sentence)) < (max_sequence_length - 1)  # need to re-add the end token so leaving 1 space
+
+    def detect_valid_sentence(self, max_len: int, src_vocab: dict, tgt_vocab: dict):
+        valid_sentence_indicies = []
+        for index in range(len(self.tgt_sentences)):
+            tgt_sentence, src_sentence = self.tgt_sentences[index], self.src_sentences[index]
+            if self.is_valid_length(tgt_sentence, max_len) and self.is_valid_length(src_sentence, max_len):
+                # if self.is_valid_tokens(tgt_sentence, tgt_vocab) and self.is_valid_tokens(src_sentence, src_vocab):
+                valid_sentence_indicies.append(index)
+                # else:
+                #   print("Unknwon token")
+            else:
+                # print("Invalid length")
+                pass
+        return valid_sentence_indicies
+
+    def extract_sentences(self, valid_sentence_indicies: list, tgt: bool):
+        if (tgt):
+            return [self.tgt_sentences[i] for i in valid_sentence_indicies]
+        else:
+            return [self.src_sentences[i] for i in valid_sentence_indicies]
+
+
+class Dataset6(Dataset):
+
+    def __init__(self, ds: Dataset6Tmp):
+        self.ds = ds
+
+    def __len__(self) -> int:
+        return len(self.ds)
+
+    def __getitem__(self, idx: int) -> Tuple[str, str]:
+        return self.ds[idx]
 
     @staticmethod
     def create_masks(eng_batch: tuple[str], kn_batch: tuple[str], seq_len: int) -> Tuple[Tensor, Tensor, Tensor]:
@@ -115,18 +157,6 @@ class Dataset6(Dataset):
         return encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask
 
 
-def is_valid_tokens(sentence, vocab):
-    for token in list(set(sentence)):
-        if token not in vocab:
-            print(bytes(token,"utf-8"))
-            return False
-    return True
-
-
-def is_valid_length(sentence, max_sequence_length):
-    return len(list(sentence)) < (max_sequence_length - 1)  # need to re-add the end token so leaving 1 space
-
-
 def get_all_sentences6(ds, lang_idx):
     for item in ds:
         yield item[lang_idx]
@@ -160,8 +190,7 @@ def get_tokenizer6(config: dict, model_folder: str, lang: str) -> Tokenizer:
 # def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
 
 
-def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, int, int, dict, dict, dict]:
-
+def load_custom_dataset(config: dict, model_folder: str) -> Dataset6Tmp:
     src_file = f"custom_datasets/{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}/{config['lang_src']}.txt"
     tgt_file = f"custom_datasets/{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}/{config['lang_tgt']}.txt"
 
@@ -177,52 +206,60 @@ def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, in
     src_sentences = [sentence.rstrip('\n').lower() for sentence in src_sentences]
     tgt_sentences = [sentence.rstrip('\n') for sentence in tgt_sentences]
 
-    full_ds = Dataset6(src_sentences, tgt_sentences)
-    tokenizer_src = get_or_build_tokenizer6(config, model_folder, full_ds, config['lang_src'])
-    tokenizer_tgt = get_or_build_tokenizer6(config, model_folder, full_ds, config['lang_tgt'])
+    full_ds = Dataset6Tmp(src_sentences, tgt_sentences)
+    return full_ds
 
-    valid_sentence_indicies = []
-    for index in range(len(tgt_sentences)):
-        tgt_sentence, src_sentence = tgt_sentences[index], src_sentences[index]
-        if is_valid_length(tgt_sentence, config['seq_len']) \
-                and is_valid_length(src_sentence, config['seq_len']):
-            if is_valid_tokens(tgt_sentence, tokenizer_tgt.get_vocab()) \
-                    and is_valid_tokens(src_sentence, tokenizer_src.get_vocab()):
-                valid_sentence_indicies.append(index)
-            else:
-                # print("Unknwon token")
-                pass
-        else:
-            # print("Invalid length")
-            pass
 
-    print(f"Number of sentences: {len(tgt_sentences)}")
+def filter_custom_dataset(config: dict, full_ds: Dataset6Tmp, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer) -> Dataset6Tmp:
+
+    valid_sentence_indicies = full_ds.detect_valid_sentence(
+        config['seq_len'], tokenizer_src.get_vocab(), tokenizer_tgt.get_vocab())
+
+    print(f"Number of sentences: {len(full_ds)}")
     print(f"Number of valid sentences: {len(valid_sentence_indicies)}")
 
-    tgt_sentences = [tgt_sentences[i] for i in valid_sentence_indicies]
-    src_sentences = [src_sentences[i] for i in valid_sentence_indicies]
+    tgt_sentences = full_ds.extract_sentences(valid_sentence_indicies, True)
+    src_sentences = full_ds.extract_sentences(valid_sentence_indicies, False)
 
-    # print(tgt_sentences[:3])
+    filtered_ds = Dataset6Tmp(src_sentences, tgt_sentences)
+    return filtered_ds
 
-    ds_raw = Dataset6(src_sentences, tgt_sentences)
+
+def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, int, int, dict, dict, dict]:
+
+    full_ds = load_custom_dataset(config, model_folder)
+    tokenizer_src = get_or_build_tokenizer6(config, model_folder, full_ds, config['lang_src'])
+    tokenizer_tgt = get_or_build_tokenizer6(config, model_folder, full_ds, config['lang_tgt'])
+    ds_raw = filter_custom_dataset(config, full_ds, tokenizer_src, tokenizer_tgt)
 
     index_to_tgt = {v: k for i, (k, v) in enumerate(tokenizer_tgt.get_vocab().items())}
 
     # keep 90% for training and 10% for validation
-    # train_ds_size = int(0.9 * len(ds_raw))
-    # val_ds_size = len(ds_raw) - train_ds_size
-    # train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
+    train_ds_size = int(0.9 * len(ds_raw))
+    val_ds_size = len(ds_raw) - train_ds_size
+    train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
 
-    # train_ds = Dataset6(train_ds_raw, tokenizer_src, tokenizer_tgt,
-    #                     config['lang_src'], config['lang_tgt'], config['seq_len'])
-    # val_ds = Dataset6(val_ds_raw, tokenizer_src, tokenizer_tgt,
-    #                   config['lang_src'], config['lang_tgt'], config['seq_len'])
+    train_ds = Dataset6(train_ds_raw)
+    val_ds = Dataset6(val_ds_raw)
 
-    train_dataloader = DataLoader(ds_raw, config['batch_size'])
+    train_dataloader = DataLoader(train_ds, config['batch_size'])
+    val_dataloader = DataLoader(val_ds, 1)
 
     # return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
-    return train_dataloader, None, len(tokenizer_src.get_vocab()), len(tokenizer_tgt.get_vocab()), tokenizer_src.get_vocab(), tokenizer_tgt.get_vocab(), index_to_tgt
+    return train_dataloader, val_dataloader, len(tokenizer_src.get_vocab()), len(tokenizer_tgt.get_vocab()), tokenizer_src.get_vocab(), tokenizer_tgt.get_vocab(), index_to_tgt
 
 
 def get_testing_ds6(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:
-    return sentence, "", None, None
+
+    # build tokenizers
+    tokenizer_src = get_tokenizer6(config, model_folder, config['lang_src'])
+    tokenizer_tgt = get_tokenizer6(config, model_folder, config['lang_tgt'])
+    index_to_tgt = {v: k for i, (k, v) in enumerate(tokenizer_tgt.get_vocab().items())}
+
+    label = None
+    if isinstance(sentence, int) or sentence.isdigit():
+        id = int(sentence)
+        ds = load_custom_dataset(config, model_folder)
+        sentence, label = ds[id]
+
+    return sentence, label, len(tokenizer_src.get_vocab()), len(tokenizer_tgt.get_vocab()), tokenizer_src.get_vocab(), tokenizer_tgt.get_vocab(), index_to_tgt

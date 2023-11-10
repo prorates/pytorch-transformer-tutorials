@@ -4,6 +4,8 @@ import math
 from torch import nn
 import torch.nn.functional as F
 from torch import Tensor
+
+from dataset6 import Dataset6
 from config import SOS, EOS, PAD, UNK
 
 
@@ -331,6 +333,31 @@ class Transformer6(nn.Module):
                                    start_token=dec_start_token, end_token=dec_end_token)  # (bs, SeqLen, d_model)
         decoder_out = self.linear(decoder_out)  # (bs, SeqLen, vocab_size)
         return decoder_out
+
+    def greedy_decode(self, src_batched_sentences: tuple[str], max_len: int, index_to_tgt: dict, device) -> Tensor:
+
+        predicated_batched_sentences = ("",)  # tuple[str]
+        for word_counter in range(max_len):
+            encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
+                src_batched_sentences, predicated_batched_sentences, max_len)
+            predictions = self.forward(src_batched_sentences,
+                                       predicated_batched_sentences,
+                                       encoder_self_attention_mask.to(device),
+                                       decoder_self_attention_mask.to(device),
+                                       decoder_cross_attention_mask.to(device),
+                                       enc_start_token=False,  # During training, model6 does not add sos to encoder input
+                                       enc_end_token=False,  # During training, model6 does not add sos to encoder input
+                                       dec_start_token=True,  # During training, model6 DOES add sos to decoder input
+                                       dec_end_token=False)  # During training, model6 DOES add eos to decoder input
+
+            next_token_prob_distribution = predictions[0][word_counter]  # not actual probs
+            next_token_index = torch.argmax(next_token_prob_distribution).item()
+            next_token = index_to_tgt[next_token_index]
+            predicated_batched_sentences = (predicated_batched_sentences[0] + next_token, )
+            if next_token == EOS:
+                break
+
+        return predicated_batched_sentences
 
 
 def build_transformer6(src_vocab_size: int, tgt_vocab_size: int, src_to_index: dict, tgt_to_index: dict,
