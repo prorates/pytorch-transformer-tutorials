@@ -76,7 +76,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model: int, max_seq_length: int):
         super(PositionalEncoding, self).__init__()
 
-        pe = torch.zeros(max_seq_length, d_model)
+        pe = torch.zeros(max_seq_length, d_model)  # (SeqLen, d_model)
         position = torch.arange(0, max_seq_length, dtype=torch.float).unsqueeze(1)
         div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.0) / d_model))
 
@@ -152,7 +152,7 @@ class Transformer2(nn.Module):
         self.fc = nn.Linear(d_model, tgt_vocab_size)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, src, tgt, src_mask, tgt_mask):
+    def forward(self, src: Tensor, tgt: Tensor, src_mask: Tensor, tgt_mask: Tensor):
         src_embedded = self.dropout(self.positional_encoding(self.encoder_embedding(src)))
         tgt_embedded = self.dropout(self.positional_encoding(self.decoder_embedding(tgt)))
 

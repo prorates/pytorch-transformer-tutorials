@@ -347,7 +347,7 @@ class Transformer1(nn.Module):
             # project next token
             # JEB: project is converting (bs, SeqLen, d_model) into (bs, SeqLen, Vocab_size)
             # JEB: in greedy method, out is (1, CurDecLen, d_model)
-            # JEB: greedy method we take the embeedings of the last word, out[:,-1] 
+            # JEB: greedy method we take the embeedings of the last word, out[:,-1]
             # JEB: so We pass a (1, d_model) to project prob is of shape (1, Vocab_Size)
             prob = self.project(out[:, -1])
 
