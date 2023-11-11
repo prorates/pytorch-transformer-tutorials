@@ -1,6 +1,8 @@
+from typing import Optional
 from pathlib import Path
 import os
 import torch
+import yaml
 
 EOS = '<eos>'
 SOS = '<sos>'
@@ -8,15 +10,15 @@ UNK = '<unk>'
 PAD = '<pad>'
 
 
-def get_config():
+def get_default_config() -> dict:
     return {
         "batch_size": 8,
         "num_epochs": 20,
         "lr": 10**-4,
         "seq_len": 80,
         "d_model": 256,  # paper: 512,
-        "N": 3,  # paper: 6,
-        "h": 4,  # paper: 8,
+        "N": 6,  # paper: 6,
+        "h": 8,  # paper: 8,
         "dropout": 10**-1,
         "d_ff": 1024,  # paper 2048,
         # "datasource": 'opus_books',
@@ -29,6 +31,30 @@ def get_config():
         "experiment_name": "runs/tmodel",
         "alt_model": "model6"  # Possible values: None, model1, model2
     }
+
+
+def get_config(filename: Optional[str] = None, modelfolder: Optional[str] = None) -> dict:
+    default_config = get_default_config()
+    if (modelfolder):
+        config_path = Path(modelfolder + "/" + "config.yaml")
+    elif (filename):
+        config_path = Path(filename)
+    else:
+        modelfolder = get_model_folder(default_config)
+        Path(modelfolder).mkdir(parents=True, exist_ok=True)
+        config_path = Path(modelfolder + "/" + "config.yaml")
+        if not Path.exists(config_path):
+            with open(config_path, 'w') as write:
+                yaml.dump(default_config, write)
+
+    if not Path.exists(config_path):
+        print("Using default config from config.py")
+        return default_config
+    else:
+        print(f"Loading config from {config_path}")
+        with open(config_path, 'r') as yamlFile:
+            configdict = yaml.safe_load(yamlFile)
+            return configdict
 
 
 def get_device():
@@ -57,20 +83,20 @@ def get_console_width():
     return console_width
 
 
-def get_model_folder(config):
+def get_model_folder(config: dict):
     if config['alt_model']:
         return f"{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}_{config['alt_model']}"
     else:
         return f"{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}"
 
 
-def get_weights_file_path(config, epoch: str):
+def get_weights_file_path(config: dict, epoch: str):
     model_folder = get_model_folder(config)
     model_filename = f"{config['model_basename']}{epoch}.pt"
     return str(Path('.') / model_folder / model_filename)
 
 
-def latest_weights_file_path(config):
+def latest_weights_file_path(config: dict):
     model_folder = get_model_folder(config)
     model_filename = f"{config['model_basename']}*"
     weights_files = list(Path(model_folder).glob(model_filename))

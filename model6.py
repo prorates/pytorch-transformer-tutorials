@@ -353,9 +353,9 @@ class Transformer6(nn.Module):
             next_token_prob_distribution = predictions[0][word_counter]  # not actual probs
             next_token_index = torch.argmax(next_token_prob_distribution).item()
             next_token = index_to_tgt[next_token_index]
-            predicated_batched_sentences = (predicated_batched_sentences[0] + next_token, )
             if next_token == EOS:
                 break
+            predicated_batched_sentences = (predicated_batched_sentences[0] + next_token, )
 
         return predicated_batched_sentences
 

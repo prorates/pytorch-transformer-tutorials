@@ -3,6 +3,8 @@ import torch.nn as nn
 import math
 from torch import Tensor
 
+from dataset1 import translation_mask
+
 # Layer normalization. Minute 14:00. Each sentence is made of many words
 # For each sentence compute the mean and variance for each item/sentence
 # Parameters alpha/beta....gamma(multiplicative)/beta(additive)....alpha/bias

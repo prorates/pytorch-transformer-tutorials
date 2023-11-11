@@ -189,7 +189,7 @@ def test_model6(config: dict, device):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index = get_ds6(
+    train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index, index_to_tgt = get_ds6(
         config, model_folder)
     model = build_model6(config, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index).to(device)
 

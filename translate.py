@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import sys
+import getopt
 from pathlib import Path
 from tokenizers import Tokenizer
 import torch
@@ -7,6 +9,7 @@ import sys
 from dataset1 import get_testing_ds1, casual_mask, translation_mask
 from dataset2 import get_testing_ds2
 from dataset3 import get_testing_ds3
+from dataset6 import get_testing_ds6
 
 from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path
 from config import get_device
@@ -199,21 +202,52 @@ def translate6(config: dict, sentence: str):
     if not Path.exists(Path(model_folder)):
         raise ValueError(f"{model_folder} model_folder does not exist")
 
-    sentence, label, to5enizer_src, tokenizer_tgt = get_testing_ds6(config, model_folder, sentence)
-    model = build_model6(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
+    sentence, label, vocab_src_len, vocab_tgt_len, src_to_index, tgt_to_index, index_to_tgt = get_testing_ds6(
+        config, model_folder, sentence)
+    model = build_model6(config, vocab_src_len, vocab_tgt_len, src_to_index, tgt_to_index).to(device)
 
     # Load the pretrained weights
     model = reload_model(config, model)
 
     # if the sentence is a number use it as an index to the test set
-    # run_translation(label, sentence, model, tokenizer_src, tokenizer_tgt, config['seq_len'], device)
+    # run_translation(label, sentence, model, tokenizer_src, tokenizer_tgt, config['seq_len'], device)A
+    model.eval()
+    with torch.no_grad():
+        src_batched_sentences = (sentence.lower(),)
+        predicated_batched_sentences = model.greedy_decode(
+            src_batched_sentences, config['seq_len'], index_to_tgt, device)
+        output_text = predicated_batched_sentences[0]
+
+    # Print the source sentence and target start prompt
+    print(f"{f'Source: ':>15}{sentence}")
+    if label != "":
+        print(f"{f'Target: ':>15}{label}")
+    print(f"{f'Prediction: ':>15}{output_text}")
 
 
-if __name__ == '__main__':
+def main(argv):
+    config_filename = None
+    model_folder = None
+    sentence = "I am not a very good a student."
+    try:
+        opts, args = getopt.getopt(argv, "hc:m:s:", ["config=", "modelfolder=", "sentence="])
+    except getopt.GetoptError:
+        print('translate.py -c <config_file> -m <model_folder> -s <sentence>')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('translate.py -c <config_file> -m <model_folder> -s <sentence<')
+            sys.exit()
+        elif opt in ("-c", "--config"):
+            config_filename = arg
+        elif opt in ("-m", "--modelfolder"):
+            model_folder = arg
+        elif opt in ("-s", "--sentence"):
+            model_folder = arg
+
     # warnings.filterwarnings('ignore')
-    config = get_config()
-    # read sentence from argument
-    sentence = sys.argv[1] if len(sys.argv) > 1 else "I am not a very good a student."
+    config = get_config(config_filename, model_folder)
+
     match config['alt_model']:
         case "model1":
             response = translate1(config, sentence)
@@ -229,3 +263,7 @@ if __name__ == '__main__':
             response = translate6(config, sentence)
         case _:
             response = translate1(config, sentence)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

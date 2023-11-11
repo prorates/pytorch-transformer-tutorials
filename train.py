@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+import sys
+import getopt
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, random_split
@@ -10,8 +14,6 @@ import torchmetrics
 import torchmetrics.text
 
 # from torchtext.data.utils import get_tokenizer
-
-from pathlib import Path
 
 from tqdm import tqdm
 from dataset1 import get_ds1, casual_mask
@@ -69,7 +71,7 @@ def reload_model(config, model, optimizer, initial_epoch, global_step):
     return model, initial_epoch, optimizer, global_step
 
 
-def save_model(model, optimizer, epoch, global_step):
+def save_model(config, model, optimizer, epoch, global_step):
     # Save the model at the end of every epoch
     model_filename = get_weights_file_path(config, f'{epoch:02d}')
     torch.save({
@@ -181,13 +183,15 @@ def train_model1(config: dict):
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id(PAD), label_smoothing=0.1).to(device)
 
+    console_width = get_console_width()
+
     for epoch in range(initial_epoch, config['num_epochs']):
         if (device == 'cuda'):
             torch.cuda.empty_cache()
 
         model.train()  # moved inside for run_validation at each step
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
-        for batch in batch_iterator:
+        for batch_num, batch in enumerate(batch_iterator):
 
             encoder_input = batch['encoder_input'].to(device)  # (B, SeqLen)
             decoder_input = batch['decoder_input'].to(device)  # (B, SeqLen)
@@ -217,6 +221,22 @@ def train_model1(config: dict):
             # update the weights
             optimizer.step()
 
+            if (batch_num > 0) and (batch_num % 100 == 0):
+                batch_iterator.write('-' * console_width)
+                batch_iterator.write(f"{f'Source: ':>15}{batch['src_text'][0]}")
+                batch_iterator.write(f"{f'Target: ':>15}{batch['tgt_text'][0]}")
+                kn_sentence_predicted = torch.argmax(proj_output[0], axis=1)
+                # JEB: Figure out how to get decode to stop at eos
+                # predicted_sentence = tokenizer_tgt.decode(kn_sentence_predicted.detach().cpu().numpy(), skip_special_tokens=True)
+                predicted_words = []
+                for idx in kn_sentence_predicted:
+                    if idx == tokenizer_tgt.token_to_id(EOS):
+                        break
+                    predicted_words.append(tokenizer_tgt.id_to_token(idx.item()))
+                predicted_sentence = ' '.join(predicted_words)
+                batch_iterator.write(f"{f'Prediction: ':>15}{predicted_sentence}")
+                batch_iterator.write('-' * console_width)
+
             # Initialize to None instead of 0. Supposed to provide better performance.
             # optimizer.zero_grad()
             optimizer.zero_grad(set_to_none=True)
@@ -228,7 +248,7 @@ def train_model1(config: dict):
                         config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Save the model at the end of every epoch
-        save_model(model, optimizer, epoch, global_step)
+        save_model(config, model, optimizer, epoch, global_step)
 
 
 def train_model2(config: dict):
@@ -251,13 +271,15 @@ def train_model2(config: dict):
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id(PAD)).to(device)
 
+    console_width = get_console_width()
+
     for epoch in range(initial_epoch, config['num_epochs']):
         if (device == 'cuda'):
             torch.cuda.empty_cache()
 
         model.train()
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
-        for batch in batch_iterator:
+        for batch_num, batch in enumerate(batch_iterator):
             optimizer.zero_grad()
             src_data = batch['src'].to(device)  # (B, SeqLen)
             tgt_data = batch['tgt'].to(device)  # (B, SeqLen)
@@ -285,11 +307,27 @@ def train_model2(config: dict):
             # update the weights
             optimizer.step()
 
+            if (batch_num > 0) and (batch_num % 100 == 0):
+                batch_iterator.write('-' * console_width)
+                batch_iterator.write(f"{f'Source: ':>15}{batch['src_text'][0]}")
+                batch_iterator.write(f"{f'Target: ':>15}{batch['tgt_text'][0]}")
+                kn_sentence_predicted = torch.argmax(output[0], axis=1)
+                # JEB: Figure out how to get decode to stop at eos
+                # predicted_sentence = tokenizer_tgt.decode(kn_sentence_predicted.detach().cpu().numpy(), skip_special_tokens=True)
+                predicted_words = []
+                for idx in kn_sentence_predicted:
+                    if idx == tokenizer_tgt.token_to_id(EOS):
+                        break
+                    predicted_words.append(tokenizer_tgt.id_to_token(idx.item()))
+                predicted_sentence = ' '.join(predicted_words)
+                batch_iterator.write(f"{f'Prediction: ':>15}{predicted_sentence}")
+                batch_iterator.write('-' * console_width)
+
             global_step += 1
             # print(f"Epoch: {epoch+1}, Loss: {loss.item()}")
 
         # Save the model at the end of every epoch
-        save_model(model, optimizer, epoch, global_step)
+        save_model(config, model, optimizer, epoch, global_step)
 
 
 def validate_model3(model: Transformer3, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
@@ -356,6 +394,8 @@ def train_model3(config: dict):
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id(PAD), label_smoothing=0.1).to(device)
 
+    console_width = get_console_width()
+
     for epoch in range(initial_epoch, config['num_epochs']):
         if (device == 'cuda'):
             torch.cuda.empty_cache()
@@ -365,7 +405,7 @@ def train_model3(config: dict):
         total_loss = 0
 
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
-        for batch in batch_iterator:
+        for batch_num, batch in enumerate(batch_iterator):
 
             src = batch['src'].to(device)  # (B, SeqLen)
             trg = batch['trg'].to(device)  # (B, SeqLen)
@@ -400,10 +440,26 @@ def train_model3(config: dict):
             # if opt.SGDR == True:
             #    opt.sched.step()
 
+            if (batch_num > 0) and (batch_num % 100 == 0):
+                batch_iterator.write('-' * console_width)
+                batch_iterator.write(f"{f'Source: ':>15}{batch['src_text'][0]}")
+                batch_iterator.write(f"{f'Target: ':>15}{batch['tgt_text'][0]}")
+                kn_sentence_predicted = torch.argmax(preds[0], axis=1)
+                # JEB: Figure out how to get decode to stop at eos
+                # predicted_sentence = tokenizer_tgt.decode(kn_sentence_predicted.detach().cpu().numpy(), skip_special_tokens=True)
+                predicted_words = []
+                for idx in kn_sentence_predicted:
+                    if idx == tokenizer_tgt.token_to_id(EOS):
+                        break
+                    predicted_words.append(tokenizer_tgt.id_to_token(idx.item()))
+                predicted_sentence = ' '.join(predicted_words)
+                batch_iterator.write(f"{f'Prediction: ':>15}{predicted_sentence}")
+                batch_iterator.write('-' * console_width)
+
             total_loss += loss.item()
 
         # Save the model at the end of every epoch
-        save_model(model, optimizer, epoch, global_step)
+        save_model(config, model, optimizer, epoch, global_step)
 
 
 def train_model4(config: dict):
@@ -515,7 +571,7 @@ def train_model6(config: dict):
                         config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Save the model at the end of every epoch
-        save_model(transformer, optimizer, epoch, global_step)
+        save_model(config, transformer, optimizer, epoch, global_step)
 
 
 def validate_model6(transformer: Transformer6, validation_ds: DataLoader, index_to_tgt: dict,
@@ -558,9 +614,25 @@ def validate_model6(transformer: Transformer6, validation_ds: DataLoader, index_
         collect_training_metrics(writer, predicted, expected, global_step)
 
 
-if __name__ == '__main__':
+def main(argv):
+    config_filename = None
+    model_folder = None
+    try:
+        opts, args = getopt.getopt(argv, "hc:m:", ["config=", "modelfolder="])
+    except getopt.GetoptError:
+        print('train.py -c <config_file> -m <model_folder>')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('train.py -c <config_file> -m <model_folder>')
+            sys.exit()
+        elif opt in ("-c", "--config"):
+            config_filename = arg
+        elif opt in ("-m", "--modelfolder"):
+            model_folder = arg
+
     # warnings.filterwarnings('ignore')
-    config = get_config()
+    config = get_config(config_filename, model_folder)
 
     match config['alt_model']:
         case "model1":
@@ -577,3 +649,7 @@ if __name__ == '__main__':
             train_model6(config)
         case _:
             train_model1(config)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
