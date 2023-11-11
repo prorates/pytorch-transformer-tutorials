@@ -121,6 +121,7 @@ def casual_mask(size: int) -> Tensor:
     # JEB: To check. Syntax is different in provided file and video
     # mask = torch.triu(torch.ones(1, size, size), diagonal=1).type(torch.int)
     mask = torch.triu(torch.ones((1, size, size)), diagonal=1).type(torch.int)
+    # Replace the 1 bellow the diagnonal to False, and the one above to True
     return mask == 0
 
 

@@ -117,14 +117,18 @@ def translate1(config: dict, sentence: str):
 
         eos_idx = tokenizer_tgt.token_to_id(EOS)
         sos_idx = tokenizer_tgt.token_to_id(SOS)
-        model_out = model.greedy_decode(source, source_mask, eos_idx, sos_idx, config['seq_len'], device)
+
+        # source shape is expected to be (bs=1, SeqLen)
+        # source_mask shape is expected to be (bs=1, 1, 1, SeqLen)
+        model_out = model.greedy_decode(source.unsqueeze(0), source_mask, eos_idx, sos_idx, config['seq_len'], device)
+        model_out_text = tokenizer_tgt.decode(model_out.detach().cpu().numpy())
 
     # Print the source sentence and target start prompt
     print(f"{f'Source: ':>15}{sentence}")
     if label != "":
         print(f"{f'Target: ':>15}{label}")
-    print(f"{f'Prediction: ':>15}", end='')
-    return tokenizer_tgt.decode(model_out)
+    print(f"{f'Prediction: ':>15}{model_out_text}")
+    return model_out_text
 
 
 def translate2(config: dict, sentence: str):
@@ -223,6 +227,7 @@ def translate6(config: dict, sentence: str):
     if label != "":
         print(f"{f'Target: ':>15}{label}")
     print(f"{f'Prediction: ':>15}{output_text}")
+    return output_text
 
 
 def main(argv):
@@ -236,14 +241,14 @@ def main(argv):
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
-            print('translate.py -c <config_file> -m <model_folder> -s <sentence<')
+            print('translate.py -c <config_file> -m <model_folder> -s <sentence>')
             sys.exit()
         elif opt in ("-c", "--config"):
             config_filename = arg
         elif opt in ("-m", "--modelfolder"):
             model_folder = arg
         elif opt in ("-s", "--sentence"):
-            model_folder = arg
+            sentence = arg
 
     # warnings.filterwarnings('ignore')
     config = get_config(config_filename, model_folder)

@@ -3,7 +3,7 @@ import torch.nn as nn
 import math
 from torch import Tensor
 
-from dataset1 import translation_mask
+from dataset1 import translation_mask, casual_mask
 
 # Layer normalization. Minute 14:00. Each sentence is made of many words
 # For each sentence compute the mean and variance for each item/sentence
@@ -25,7 +25,7 @@ class LayerNormalization(nn.Module):
 
     def forward(self, x) -> Tensor:
         # usually the mean cancels the dimension to which it is applied
-        # x: (batch, seq_len, hidden_size)
+        # x: (bs, SeqLen, hidden_size)
         # Keep the dimension for broadcasting
         mean = x.mean(dim=-1, keepdim=True)
         # Keep the dimension for broadcasting
@@ -44,7 +44,7 @@ class FeedForwardBlock(nn.Module):
         self.linear_2 = nn.Linear(d_ff, d_model)  # W2 and B2
 
     def forward(self, x) -> Tensor:
-        # (Batch, Seq_Len, d_model) --> (Batch, Seql_Len, d_ff) --> (Batch, Seq_Len, d_model)
+        # (bs, SeqLen, d_model) --> (Batch, Seql_Len, d_ff) --> (bs, SeqLen, d_model)
         return self.linear_2(self.dropout(torch.relu(self.linear_1(x))))
 
 
@@ -62,7 +62,7 @@ class InputEmbeddings(nn.Module):
         # kind of a dictionary. embedding maps number to the same vector every time.
         # The vector is learned by the model.
         # see 3.4 of the paper
-        # (batch, seq_len) --> (batch, seq_len, d_model)
+        # (bs, SeqLen) --> (bs, SeqLen, d_model)
         # Multiply by sqrt(d_model) to scale the embeddings according to the paper
         return self.embedding(x) * math.sqrt(self.d_model)
 
@@ -167,24 +167,24 @@ class MultiHeadAttentionBlock(nn.Module):
         # mask avoid that some word interact with some other workds
         # we need to put a value very small to the matrix before we apply
         # the soft max. e to the power of infinity will be very small.
-        query = self.w_q(q)  # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-        key = self.w_k(k)  # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
-        value = self.w_v(v)  # (batch, seq_len, d_model) --> (batch, seq_len, d_model)
+        query = self.w_q(q)  # (bs, SeqLen, d_model) --> (bs, SeqLen, d_model)
+        key = self.w_k(k)  # (bs, SeqLen, d_model) --> (bs, SeqLen, d_model)
+        value = self.w_v(v)  # (bs, SeqLen, d_model) --> (bs, SeqLen, d_model)
 
         # Batch dimension is preserved, Seuence dimension is preserved,
         # We want the h dimension to be the second dimension hence we invoke the transpose method.
-        # (Batch, Seq_Len, d_model) --> (Batch, Seq_Len, h, d_k) --> (Batch, h, Seq_Len, d_k)
+        # (bs, SeqLen, d_model) --> (bs, SeqLen, h, d_k) --> (Batch, h, Seq_Len, d_k)
         query = query.view(query.shape[0], query.shape[1], self.h, self.d_k).transpose(1, 2)
         key = key.view(key.shape[0], key.shape[1], self.h, self.d_k).transpose(1, 2)
         value = value.view(value.shape[0], value.shape[1], self.h, self.d_k).transpose(1, 2)
 
         x, self.attention_scores = MultiHeadAttentionBlock.attention(query, key, value, mask, self.dropout)
 
-        # (Batch, h, Seq_Len, d_K) --> (Batch, Sql_Len, h, d_K) -->  (Batch, Seq_Len, d_model
+        # (Batch, h, Seq_Len, d_K) --> (Batch, Sql_Len, h, d_K) -->  (bs, SeqLen, d_model
         # Pytorch needs the memory to be continguouos to create a view
         x = x.transpose(1, 2).contiguous().view(x.shape[0], -1, self.h * self.d_k)
 
-        # (Batch, Seq_Len, d_model) --> (Batch, Sql_Len, d_model)
+        # (bs, SeqLen, d_model) --> (Batch, Sql_Len, d_model)
         return self.w_o(x)
 
 
@@ -214,7 +214,10 @@ class Encoder(nn.Module):
         self.layers = layers
         self.norm = LayerNormalization(features)
 
+    # forward returns a (bs, SeqLen , d_model)
     def forward(self, x, mask) -> Tensor:
+        # x shape is (bs, SeqLen, d_model)
+        # mask shape is (bs, 1, 1 , SeqLen)
         for layer in self.layers:
             # The ouput of the previous layer is the input for the next layer
             # See the forward method of the EncoderBlock
@@ -233,7 +236,7 @@ class DecoderBlock(nn.Module):
         self.residual_connections = nn.ModuleList([ResidualConnection(features, dropout) for _ in range(3)])
 
     # src_mask is hiding the padding words
-    def forward(self, x, encoder_ouput, src_mask, tgt_mask) -> Tensor:
+    def forward(self, x, encoder_ouput: Tensor, src_mask: Tensor, tgt_mask: Tensor) -> Tensor:
         # query, key, value are the same
         # this invokes the forward function of the MultiHeadAttention
         # x (decoder side) is used for q, k and v
@@ -253,7 +256,11 @@ class Decoder(nn.Module):
         self.layers = layers
         self.norm = LayerNormalization(features)
 
-    def forward(self, x, encoder_output, src_mask, tgt_mask) -> Tensor:
+    # forward returns a (bs, SeqLen, d_model)
+    def forward(self, x, encoder_output: Tensor, src_mask: Tensor, tgt_mask: Tensor) -> Tensor:
+        # encoder_output shape is (bs, SeqLen, d_model)
+        # src_mask shape is (bs, 1, 1 , SeqLen)
+        # tgt_mask shape is (bs, 1, SeqLen, SeqLen)
         for layer in self.layers:
             # The ouput of the previous layer is the input for the next layer
             # See the forward method of the DecoderBlock
@@ -268,8 +275,10 @@ class ProjectionLayer(nn.Module):
         super().__init__()
         self.proj = nn.Linear(d_model, vocab_size)
 
-    def forward(self, x) -> Tensor:
-        # (Batch, Seq_Len, d_model) --> (Batch, Seq_Len, Vocab_Size)
+    # foward converts a (bs, d_model) into (bs, Vocab_Size)
+    def forward(self, x: Tensor) -> Tensor:
+        # JEB: There is a mismatch with the official code which comments
+        # indicates (bs, SeqLen, d_model) --> (bs, SeqLen, Vocab_Size)
         # JEB: For some reasons log_softmax has been removed. This needs to be studied
         # return torch.log_softmax(self.proj(x), dim=-1)
         return self.proj(x)
@@ -289,48 +298,63 @@ class Transformer1(nn.Module):
         self.projection_layer = projection_layer
 
     # during inference we can reuse the output of the decoder.
-    def encode(self, src, src_mask: Tensor) -> Tensor:
-        # (batch, seq_len, d_model)
+    def encode(self, src: Tensor, src_mask: Tensor) -> Tensor:
+        # (bs, SeqLen, d_model)
         src = self.src_embed(src)
         src = self.src_pos(src)
         return self.encoder(src, src_mask)
 
     def decode(self, encoder_output: Tensor, src_mask: Tensor, tgt: Tensor, tgt_mask: Tensor) -> Tensor:
-        # (batch, seq_len, d_model)
+        # (bs, SeqLen, d_model)
         tgt = self.tgt_embed(tgt)
         tgt = self.tgt_pos(tgt)
         return self.decoder(tgt, encoder_output, src_mask, tgt_mask)
 
-    def project(self, x) -> Tensor:
-        # (batch, seq_len, vocab_size)
+    # JEB: Need to underdand. The shape of the projected tensor is not always the same
+    # project converts a (1, d_model) into (1, Vocab_Size)
+    # project converts a (bs, SeqLen, d_model) into (bs, SeqLen, Vocab_Size)
+    def project(self, x: Tensor) -> Tensor:
         return self.projection_layer(x)
 
-    def greedy_decode(self, source, source_mask: Tensor, eos_idx: int,
+    def greedy_decode(self, source: Tensor, source_mask: Tensor, eos_idx: int,
                       sos_idx: int, max_len: int, device):
 
         # Precompute the encoder output and reuse it for every step
-        # JEB: source at point is not a batch hence the unsqueeze(0).
-        # JEB: not sure the is the only place it is needeed
-        encoder_output = self.encode(source.unsqueeze(0), source_mask)
-        # JEB encoder_output = self.encode(source, source_mask)
+        # source is (1, SeqLen, d_model) and source_mask (1, SeqLen, d_model)
+        encoder_output = self.encode(source, source_mask)
 
         # Initialize the decoder input with the sos token
+        # target is (1, 1) and contains sos.
         decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(source).to(device)
 
         # Generate the translation word by word
-        while decoder_input.size(1) < max_len:
+        # while decoder_input.size(1) < max_len:
+        while True:
+            # decoder_input shae is (1, CurDecLen)
+            if decoder_input.size(1) == max_len:
+                break
+
             # build mask for target and calculate output
-            decoder_mask = translation_mask(decoder_input.size(1)).type_as(source_mask).to(device)
-            # JEB decoder_mask = casual_mask(decoder_input.size(1)).type_as(source_mask).to(device)
+            # decoder_mask = translation_mask(decoder_input.size(1)).type_as(source_mask).to(device)
+            # Since the decoder_input is increased at each loop, we need to recompute the decoder_mask
+            # decoder_mask of shape is (1, CurDecLen, CurDecLen)
+            decoder_mask = casual_mask(decoder_input.size(1)).type_as(source_mask).to(device)
 
             # calculate the output of the decoder
+            # out has the shape (1, CurDecLen, d_model)
             out = self.decode(encoder_output, source_mask, decoder_input, decoder_mask)
 
             # project next token
+            # JEB: project is converting (bs, SeqLen, d_model) into (bs, SeqLen, Vocab_size)
+            # JEB: in greedy method, out is (1, CurDecLen, d_model)
+            # JEB: greedy method we take the embeedings of the last word, out[:,-1] 
+            # JEB: so We pass a (1, d_model) to project prob is of shape (1, Vocab_Size)
             prob = self.project(out[:, -1])
 
             # Select the token with the max probability (because it is a greedy search)
             _, next_word = torch.max(prob, dim=1)
+
+            # We happen the next token to the decoder_input and feed to the decoder again
             decoder_input = torch.cat(
                 [decoder_input, torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(device)], dim=1
             )
@@ -342,7 +366,10 @@ class Transformer1(nn.Module):
             if next_word == eos_idx:
                 break
 
-        return decoder_input[0].tolist()
+        # We return a Tensor of shape (SeqLen)
+        # return decoder_input[0].squeeze(0) # was done in train.py
+        # return tokenizer_tgt.decode(decoder_input[0].tolist()) was done in translate.py
+        return decoder_input[0]
 
 
 def build_transformer1(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int,

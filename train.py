@@ -140,7 +140,11 @@ def validate_model1(model: Transformer1, validation_ds: DataLoader, tokenizer_sr
 
             eos_idx = tokenizer_tgt.token_to_id(EOS)
             sos_idx = tokenizer_tgt.token_to_id(SOS)
-            model_out = model.greedy_decode(model, encoder_input, encoder_mask, sos_idx, eos_idx, max_len, device)
+            # JEB: Not sure this is really consistent
+            # encoder_input has shape (bs=1, SeqLen)
+            # encoder_mask has shape (bs=1, 1, 1, SeqLen)
+            # model_out has shape (SeqLen)
+            model_out = model.greedy_decode(encoder_input, encoder_mask, sos_idx, eos_idx, max_len, device)
 
             source_text = batch['src_text'][0]
             target_text = batch['tgt_text'][0]
