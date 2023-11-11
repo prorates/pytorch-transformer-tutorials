@@ -20,8 +20,9 @@ from dataset1 import get_ds1, casual_mask
 from dataset2 import get_ds2
 from dataset3 import get_ds3
 from dataset6 import get_ds6, Dataset6
+from dataset7 import get_ds7
 
-from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path
+from config import get_model_folder, get_weights_file_path, get_config, latest_weights_file_path, get_best_model_params_path
 from config import get_console_width, get_device
 from config import EOS, SOS, PAD, UNK
 
@@ -31,6 +32,7 @@ from model3 import Transformer3, build_transformer3
 from model4 import Transformer4, build_transformer4
 from model5 import Transformer5, build_transformer5
 from model6 import Transformer6, build_transformer6
+from model7 import Transformer7, build_transformer7
 
 
 def collect_training_metrics(writer, predicted, expected, global_step):
@@ -71,7 +73,7 @@ def reload_model(config, model, optimizer, initial_epoch, global_step):
     return model, initial_epoch, optimizer, global_step
 
 
-def save_model(config, model, optimizer, epoch, global_step):
+def save_model(config, model, optimizer, epoch: int, global_step: int, best_model_yet: bool = False):
     # Save the model at the end of every epoch
     model_filename = get_weights_file_path(config, f'{epoch:02d}')
     torch.save({
@@ -80,6 +82,15 @@ def save_model(config, model, optimizer, epoch, global_step):
         'optimizer_state_dict': optimizer.state_dict(),
         'global_step': global_step
     }, model_filename)
+
+    if (best_model_yet):
+        best_model_filename = get_best_model_params_path(config, f'{epoch:02d}')
+        torch.save({
+            'epoch': epoch,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'global_step': global_step
+        }, best_model_filename)
 
 
 def build_model1(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer1:
@@ -116,6 +127,12 @@ def build_model6(config: dict, vocab_src_len: int, vocab_tgt_len: int, src_to_in
     model = build_transformer6(vocab_src_len, vocab_tgt_len, src_to_index, tgt_to_index, config['seq_len'], config['seq_len'],
                                d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
 
+    return model
+
+
+def build_model7(config: dict, vocab_tgt_len: int) -> Transformer7:
+    model = build_transformer7(vocab_tgt_len,
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
     return model
 
 
@@ -618,6 +635,137 @@ def validate_model6(transformer: Transformer6, validation_ds: DataLoader, index_
         collect_training_metrics(writer, predicted, expected, global_step)
 
 
+def train_model7(config: dict):
+    device = get_device()
+
+    model_folder = get_model_folder(config)
+    Path(model_folder).mkdir(parents=True, exist_ok=True)
+
+    train_dataloader, val_dataloader, test_dataloader, tokenizer_tgt = get_ds7(config, model_folder)
+    transformer = build_model7(config, tokenizer_tgt.get_vocab_size()).to(device)
+
+    # Tensorboard
+    writer = SummaryWriter(get_model_folder(config) + "/" + config['experiment_name'])
+
+    optimizer = torch.optim.Adam(transformer.parameters(), lr=config['lr'])
+
+    total_loss = 0
+    initial_epoch = 0
+    global_step = 0
+
+    # model.load_state_dict(torch.load(best_model_params_path)) # load best model states
+    transformer, initial_epoch, optimizer, global_step = reload_model(
+        config, transformer, optimizer, initial_epoch, global_step)
+    loss_fn = nn.CrossEntropyLoss()
+
+    console_width = get_console_width()
+
+    lr = 5.0  # learning rate
+    optimizer = torch.optim.SGD(transformer.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
+
+    # total_loss = 0.
+    # log_interval = 200
+    # start_time = time.time()
+    # num_batches = len(train_data) // bptt
+
+    # for epoch in range(1, epochs + 1):
+    #    epoch_start_time = time.time()
+
+    for epoch in range(initial_epoch, config['num_epochs']):
+        if (device == 'cuda'):
+            torch.cuda.empty_cache()
+
+        transformer.train()  # moved inside for run_validation at each step
+        batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
+        # for batch, i in enumerate(range(0, train_data.size(0) - 1, bptt)):
+        for batch_num, batch in enumerate(batch_iterator):
+            data, targets = get_batch(train_data, i)
+            output = transformer(data)
+            output_flat = output.view(-1, ntokens)
+            loss = loss_fn(output_flat, targets)
+
+            optimizer.zero_grad()
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(transformer.parameters(), 0.5)
+            optimizer.step()
+
+            total_loss += loss.item()
+            if batch % log_interval == 0 and batch > 0:
+                lr = scheduler.get_last_lr()[0]
+                ms_per_batch = (time.time() - start_time) * 1000 / log_interval
+                cur_loss = total_loss / log_interval
+                ppl = math.exp(cur_loss)
+                print(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
+                      f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
+                      f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
+                total_loss = 0
+                start_time = time.time()
+
+        # Run validation at the end of each epoch
+        # val_loss = (model, val_data)
+        val_loss = validate_model7(transformer, val_dataloader, index_to_tgt,
+                                   config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+
+        # val_ppl = math.exp(val_loss)
+        # elapsed = time.time() - epoch_start_time
+        # print_msg('-' * console_width)
+        # print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
+        #     f'valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}')
+        # print('-' * console_width)
+
+        best_model_yet = False
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_model_yet = True
+
+        # Save the model at the end of every epoch
+        save_model(config, transformer, optimizer, epoch, global_step, best_model_yet)
+
+        #
+        scheduler.step()
+
+    # test_loss = evaluate(model, test_data)
+    # test_ppl = math.exp(test_loss)
+    # print(f'| End of training | test loss {test_loss:5.2f} | ' f'test ppl {test_ppl:8.2f}')
+
+
+def validate_model7(transformer: Transformer7, validation_ds: DataLoader, index_to_tgt: dict,
+                    max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
+
+    transformer.eval()
+    count = 0
+
+    source_texts = []
+    expected = []
+    predicted = []
+
+    console_width = get_console_width()
+
+    # with torch.no_grad():
+    #     for batch in validation_ds:
+    #         count += 1
+
+    #         if count == num_examples:
+    #             print_msg('-' * console_width)
+    #             break
+
+    model.eval()  # turn on evaluation mode
+    total_loss = 0.
+    with torch.no_grad():
+        for i in range(0, eval_data.size(0) - 1, bptt):
+            data, targets = get_batch(eval_data, i)
+            seq_len = data.size(0)
+            output = model(data)
+            output_flat = output.view(-1, ntokens)
+            total_loss += seq_len * criterion(output_flat, targets).item()
+
+    if writer:
+        collect_training_metrics(writer, predicted, expected, global_step)
+
+    return total_loss / (len(eval_data) - 1)
+
+
 def main(argv):
     config_filename = None
     model_folder = None
@@ -651,6 +799,8 @@ def main(argv):
             train_model5(config)
         case "model6":
             train_model6(config)
+        case "model7":
+            train_model7(config)
         case _:
             train_model1(config)
 

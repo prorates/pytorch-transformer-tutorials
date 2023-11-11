@@ -266,6 +266,8 @@ def main(argv):
             response = translate5(config, sentence)
         case "model6":
             response = translate6(config, sentence)
+        case "model7":
+            raise ValueError("Not implemented yet")
         case _:
             response = translate1(config, sentence)
 

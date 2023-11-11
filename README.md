@@ -33,6 +33,10 @@ The code is original code is available [here](https://github.com/ajhalthor/Trans
 
 ## Model 7
 
+See [Huggineface Transformer Tutorial](https://pytorch.org/tutorials/beginner/transformer_tutorial.html)
+
+## Model 8
+
 See [video](https://youtu.be/9uw3F6rndnA)
 
 ## Size requirements

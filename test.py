@@ -27,11 +27,13 @@ from model3 import Transformer3, build_transformer3
 from model4 import Transformer4, build_transformer4
 from model5 import Transformer5, build_transformer5
 from model6 import Transformer6, build_transformer6
+from model7 import Transformer7, build_transformer7
 
 from dataset1 import get_ds1
 from dataset2 import get_ds2
 from dataset3 import get_ds3
 from dataset6 import get_ds6
+from dataset7 import get_ds7
 
 
 def reload_model(config, model, optimizer, initial_epoch, global_step):
@@ -93,6 +95,12 @@ def build_model5(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transf
 
 def build_model6(config: dict, vocab_src_len: int, vocab_tgt_len: int, src_to_index: dict, tgt_to_index: dict) -> Transformer6:
     model = build_transformer6(vocab_src_len, vocab_tgt_len, src_to_index, tgt_to_index, config['seq_len'], config['seq_len'],
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    return model
+
+
+def build_model7(config: dict, vocab_tgt_len: int) -> Transformer7:
+    model = build_transformer7(vocab_tgt_len,
                                d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
     return model
 
@@ -197,14 +205,31 @@ def test_model6(config: dict, device):
     model.train()
 
 
+def test_model7(config: dict, device):
+    config['model'] = "model7"
+    config['datasource'] = "translate"
+    config['lang_src'] = "en"
+    config['lang_tgt'] = "fr"
+
+    model_folder = get_model_folder(config)
+    Path(model_folder).mkdir(parents=True, exist_ok=True)
+
+    train_dataloader, val_dataloader, test_dataloader, tokenizer_tgt = get_ds7(config, model_folder)
+    model = build_model7(config, tokenizer_tgt.get_vocab_size()).to(device)
+
+    print(model)
+    model.train()
+
+
 if __name__ == '__main__':
     # warnings.filterwarnings('ignore')
     config = get_config()
     device = get_device()
 
-    test_model1(config, device)
-    test_model2(config, device)
-    test_model3(config, device)
-    test_model4(config, device)
-    test_model5(config, device)
-    test_model6(config, device)
+    # test_model1(config, device)
+    # test_model2(config, device)
+    # test_model3(config, device)
+    # test_model4(config, device)
+    # test_model5(config, device)
+    # test_model6(config, device)
+    test_model7(config, device)

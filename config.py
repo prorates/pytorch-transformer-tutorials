@@ -29,7 +29,7 @@ def get_default_config() -> dict:
         "preload": "latest",  # Possible values: None, "02", "latest"
         "tokenizer_file": "tokenizer_{0}",
         "experiment_name": "runs/tmodel",
-        "alt_model": "model6"  # Possible values: None, model1, model2
+        "alt_model": "model7"  # Possible values: None, model1, model2
     }
 
 
@@ -93,6 +93,12 @@ def get_model_folder(config: dict):
 def get_weights_file_path(config: dict, epoch: str):
     model_folder = get_model_folder(config)
     model_filename = f"{config['model_basename']}{epoch}.pt"
+    return str(Path('.') / model_folder / model_filename)
+
+
+def get_best_model_params_path(config: dict):
+    model_folder = get_model_folder(config)
+    model_filename = "best_model_params.pt"
     return str(Path('.') / model_folder / model_filename)
 
 
