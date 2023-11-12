@@ -14,8 +14,6 @@ from tokenizers import Tokenizer
 import torchmetrics
 import torchmetrics.text
 
-# from torchtext.data.utils import get_tokenizer
-
 from tqdm import tqdm
 from dataset1 import get_ds1, casual_mask
 from dataset2 import get_ds2
@@ -679,14 +677,19 @@ def train_model7(config: dict):
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
         for batch_num, batch in enumerate(batch_iterator):
             data, targets = batch
-            data = data.squeeze(0)
-            targets = targets.squeeze(0)
+            data = data.squeeze(0).to(device)
+            targets = targets.squeeze(0).to(device)
             # data: Tensor, shape ``[seq_len, batch_size]``
             # src_mask: Tensor, shape ``[seq_len, seq_len]``
             # output Tensor of shape ``[seq_len, batch_size, ntoken]``
             output = transformer(data)
             output_flat = output.view(-1, tokenizer_tgt.get_vocab_size())
             loss = loss_fn(output_flat, targets)
+            batch_iterator.set_postfix({"Loss": f"{loss.item():6.3f}"})
+
+            # Log of loss
+            writer.add_scalar('train loss', loss.item(), global_step)
+            writer.flush()
 
             optimizer.zero_grad()
             loss.backward()
@@ -705,10 +708,12 @@ def train_model7(config: dict):
             #     total_loss = 0
             #     start_time = time.time()
 
+            global_step += 1
+
         # Run validation at the end of each epoch
         # val_loss = (model, val_data)
-        val_loss = validate_model7(transformer, val_dataloader, index_to_tgt,
-                                   config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+        # val_loss = validate_model7(transformer, val_dataloader, index_to_tgt,
+        #                           config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # val_ppl = math.exp(val_loss)
         # elapsed = time.time() - epoch_start_time
@@ -718,9 +723,9 @@ def train_model7(config: dict):
         # print('-' * console_width)
 
         best_model_yet = False
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_model_yet = True
+        # if val_loss < best_val_loss:
+        #     best_val_loss = val_loss
+        #     best_model_yet = True
 
         # Save the model at the end of every epoch
         save_model(config, transformer, optimizer, epoch, global_step, best_model_yet)

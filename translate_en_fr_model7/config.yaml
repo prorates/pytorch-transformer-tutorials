@@ -1,0 +1,17 @@
+N: 2
+alt_model: model7
+batch_size: 8
+d_ff: 200
+d_model: 200
+datasource: translate
+dropout: 0.1
+experiment_name: runs/tmodel
+h: 2
+lang_src: en
+lang_tgt: fr
+lr: 5.0
+model_basename: tmodel_
+num_epochs: 3
+preload: latest
+seq_len: 80
+tokenizer_file: tokenizer_{0}

@@ -9,8 +9,6 @@ from tokenizers import Tokenizer
 import torchmetrics
 import torchmetrics.text
 
-# from torchtext.data.utils import get_tokenizer
-
 from pathlib import Path
 
 from tqdm import tqdm

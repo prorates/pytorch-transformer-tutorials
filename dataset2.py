@@ -141,7 +141,6 @@ def get_all_sentences2(ds, lang):
         yield item[lang]
 
 
-# JEB: Original code was based on depraced torchtext.data.Field amd spacy
 # Migrating to Vocab and get_tokenizer did not seem to be worth it.
 # Using the HuggingFace Tokenizer instead
 def get_or_build_tokenizer2(config: dict, model_folder: str, ds, lang: str) -> Tokenizer:

@@ -5,8 +5,6 @@ from torch import Tensor
 from torchtext.datasets import WikiText2
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import IterableDataset
-from torchtext.data.utils import get_tokenizer
-from torchtext.vocab import build_vocab_from_iterator
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
 from tokenizers.trainers import WordLevelTrainer
