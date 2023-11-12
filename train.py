@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import sys
 import getopt
+import time
 from pathlib import Path
 
 import torch
@@ -664,25 +665,34 @@ def train_model7(config: dict):
     optimizer = torch.optim.SGD(transformer.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 
-    # total_loss = 0.
-    # log_interval = 200
-    # start_time = time.time()
+    total_loss = 0.
+    log_interval = 200
+    start_time = time.time()
     # num_batches = len(train_data) // bptt
 
-    # for epoch in range(1, epochs + 1):
-    #    epoch_start_time = time.time()
-
     for epoch in range(initial_epoch, config['num_epochs']):
+        epoch_start_time = time.time()
         if (device == 'cuda'):
             torch.cuda.empty_cache()
 
         transformer.train()  # moved inside for run_validation at each step
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
-        # for batch, i in enumerate(range(0, train_data.size(0) - 1, bptt)):
         for batch_num, batch in enumerate(batch_iterator):
-            data, targets = get_batch(train_data, i)
+            data, targets = batch
+            print("==================")
+            print("IN")
+            # src: Tensor, shape ``[seq_len, batch_size]``
+            # src_mask: Tensor, shape ``[seq_len, seq_len]``
+            # output Tensor of shape ``[seq_len, batch_size, ntoken]``
+            print(data.shape)
             output = transformer(data)
-            output_flat = output.view(-1, ntokens)
+            print("OUT")
+            print(output.shape)
+            output_flat = output.view(-1, tokenizer_tgt.get_vocab_size())
+            print("FLAT")
+            print(output_flat.shape)
+            print("TARGET")
+            print(targets.shape)
             loss = loss_fn(output_flat, targets)
 
             optimizer.zero_grad()
@@ -691,16 +701,16 @@ def train_model7(config: dict):
             optimizer.step()
 
             total_loss += loss.item()
-            if batch % log_interval == 0 and batch > 0:
-                lr = scheduler.get_last_lr()[0]
-                ms_per_batch = (time.time() - start_time) * 1000 / log_interval
-                cur_loss = total_loss / log_interval
-                ppl = math.exp(cur_loss)
-                print(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
-                      f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
-                      f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
-                total_loss = 0
-                start_time = time.time()
+            # if batch % log_interval == 0 and batch > 0:
+            #     lr = scheduler.get_last_lr()[0]
+            #     ms_per_batch = (time.time() - start_time) * 1000 / log_interval
+            #     cur_loss = total_loss / log_interval
+            #     ppl = math.exp(cur_loss)
+            #     print(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
+            #           f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
+            #           f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
+            #     total_loss = 0
+            #     start_time = time.time()
 
         # Run validation at the end of each epoch
         # val_loss = (model, val_data)

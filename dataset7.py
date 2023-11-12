@@ -17,16 +17,28 @@ from pathlib import Path
 
 class Dataset7(Dataset):
 
-    def __init__(self, raw_text_iter: IterableDataset, tokenizer_tgt: Tokenizer, bptt: int) -> None:
+    def __init__(self, raw_text_iter: IterableDataset, tokenizer: Tokenizer) -> None:
         super().__init__()
-        self.tokenizer_tgt = tokenizer_tgt
-        self.bptt = bptt
-        self.raw_text_iter = raw_text_iter
 
-    def data_process(self) -> Tensor:
+        self.raw_text_iter = raw_text_iter
+        self.tokenizer = tokenizer
+        self.vocab_size = tokenizer.get_vocab_size()
+        self.vocab = tokenizer.get_vocab()
+        self.data = self.data_process()
+
+    def data_process(self):
         """Converts raw text into a flat Tensor."""
-        data = [torch.tensor(vocab(self.tokenizer_tgt(item)), dtype=torch.long) for item in self.raw_text_iter]
-        return torch.cat(tuple(filter(lambda t: t.numel() > 0, data)))
+        tokenized_data = []
+        for item in self.raw_text_iter:
+            tokens = self.tokenizer.encode(item)
+            tokenized_data.extend(tokens.ids)
+        return tokenized_data
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data[idx], self.data[idx+1]
 
     def batchify(self, data: Tensor, bsz: int) -> Tensor:
         """Divides the data into ``bsz`` separate sequences, removing extra elements
@@ -95,9 +107,9 @@ def get_ds7(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Da
     # ``train_iter`` was "consumed" by the process of building the vocab,
     # so we have to create it again
     train_iter, val_iter, test_iter = WikiText2()
-    train_data = Dataset7(train_iter, tokenizer_tgt=tokenizer, bptt=35)
-    val_data = Dataset7(val_iter, tokenizer_tgt=tokenizer, bptt=35)
-    test_data = Dataset7(test_iter, tokenizer_tgt=tokenizer, bptt=35)
+    train_data = Dataset7(train_iter, tokenizer=tokenizer)
+    val_data = Dataset7(val_iter, tokenizer=tokenizer)
+    test_data = Dataset7(test_iter, tokenizer=tokenizer)
 
     train_dataloader = DataLoader(train_data, config['batch_size'])
     val_dataloader = DataLoader(val_data, 1)
