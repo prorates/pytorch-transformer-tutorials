@@ -2,6 +2,7 @@
 import sys
 import getopt
 import time
+import math
 from pathlib import Path
 
 import torch
@@ -63,7 +64,7 @@ def reload_model(config, model, optimizer, initial_epoch, global_step):
     if model_filename:
         print(f'Preloading model {model_filename}')
         state = torch.load(model_filename)
-        model.load_state_dict(state['model_state_dict'])  # JEB: This was not in the video
+        model.load_state_dict(state['model_state_dict'])  # JEB: This was not in the vide
         initial_epoch = state['epoch'] + 1
         optimizer.load_state_dict(state['optimizer_state_dict'])
         global_step = state['global_step']
@@ -646,27 +647,23 @@ def train_model7(config: dict):
     # Tensorboard
     writer = SummaryWriter(get_model_folder(config) + "/" + config['experiment_name'])
 
-    optimizer = torch.optim.Adam(transformer.parameters(), lr=config['lr'])
+    lr = 5.0  # learning rate
+    optimizer = torch.optim.SGD(transformer.parameters(), lr=lr)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 
     total_loss = 0
     initial_epoch = 0
     global_step = 0
+    log_interval = 200
 
-    # model.load_state_dict(torch.load(best_model_params_path)) # load best model states
     transformer, initial_epoch, optimizer, global_step = reload_model(
         config, transformer, optimizer, initial_epoch, global_step)
     loss_fn = nn.CrossEntropyLoss()
 
     console_width = get_console_width()
 
-    lr = 5.0  # learning rate
-    optimizer = torch.optim.SGD(transformer.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
-
-    total_loss = 0.
-    log_interval = 200
     start_time = time.time()
-    # num_batches = len(train_data) // bptt
+    num_batches = len(train_dataloader)
 
     for epoch in range(initial_epoch, config['num_epochs']):
         epoch_start_time = time.time()
@@ -697,35 +694,35 @@ def train_model7(config: dict):
             optimizer.step()
 
             total_loss += loss.item()
-            # if batch % log_interval == 0 and batch > 0:
-            #     lr = scheduler.get_last_lr()[0]
-            #     ms_per_batch = (time.time() - start_time) * 1000 / log_interval
-            #     cur_loss = total_loss / log_interval
-            #     ppl = math.exp(cur_loss)
-            #     print(f'| epoch {epoch:3d} | {batch:5d}/{num_batches:5d} batches | '
-            #           f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | '
-            #           f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
-            #     total_loss = 0
-            #     start_time = time.time()
+            if batch_num % log_interval == 0 and batch_num > 0:
+                lr = scheduler.get_last_lr()[0]
+                ms_per_batch = (time.time() - start_time) * 1000 / log_interval
+                cur_loss = total_loss / log_interval
+                ppl = math.exp(cur_loss)
+                batch_iterator.write(
+                    f'| epoch {epoch:3d} | {batch_num:5d}/{num_batches:5d} batches | ' f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | ' f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
+                total_loss = 0
+                start_time = time.time()
 
             global_step += 1
 
         # Run validation at the end of each epoch
+        val_loss = 0
         # val_loss = (model, val_data)
         # val_loss = validate_model7(transformer, val_dataloader, index_to_tgt,
         #                           config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
-        # val_ppl = math.exp(val_loss)
-        # elapsed = time.time() - epoch_start_time
-        # print_msg('-' * console_width)
-        # print(f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | '
-        #     f'valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}')
-        # print('-' * console_width)
+        val_ppl = math.exp(val_loss)
+        elapsed = time.time() - epoch_start_time
+        batch_iterator.write('-' * console_width)
+        batch_iterator.write(
+            f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | ' f'valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}')
+        batch_iterator.write('-' * console_width)
 
         best_model_yet = False
-        # if val_loss < best_val_loss:
-        #     best_val_loss = val_loss
-        #     best_model_yet = True
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_model_yet = True
 
         # Save the model at the end of every epoch
         save_model(config, transformer, optimizer, epoch, global_step, best_model_yet)

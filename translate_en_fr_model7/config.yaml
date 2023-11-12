@@ -11,7 +11,7 @@ lang_src: en
 lang_tgt: fr
 lr: 5.0
 model_basename: tmodel_
-num_epochs: 3
+num_epochs: 4
 preload: latest
 seq_len: 80
 tokenizer_file: tokenizer_{0}
