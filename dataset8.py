@@ -1,8 +1,12 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from typing import Tuple
+from torch.utils.data import DataLoader
+from tokenizers import Tokenizer
 
-def get_batch(split, train_data, val_data, block_size:int, batch_size: int, device):
+
+def get_batch(split, train_data, val_data, block_size: int, batch_size: int, device):
     # generate a small batch of data of inputs x and targets y
     data = train_data if split == 'train' else val_data
     ix = torch.randint(len(data) - block_size, (batch_size,))
@@ -10,6 +14,11 @@ def get_batch(split, train_data, val_data, block_size:int, batch_size: int, devi
     y = torch.stack([data[i+1:i+block_size+1] for i in ix])
     x, y = x.to(device), y.to(device)
     return x, y
+
+
+def get_ds8(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, DataLoader, Tokenizer]:
+    return None, None, None, None
+
 
 def local_testing():
     # wget https://raw.githubusercontent.com/karpathy/char-rnn/master/data/tinyshakespeare/input.txt
@@ -32,7 +41,6 @@ def local_testing():
     val_data = data[n:]
 
 # data loading
-
 
 
 if __name__ == "__main__":

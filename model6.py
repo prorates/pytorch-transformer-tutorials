@@ -6,11 +6,7 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from dataset6 import Dataset6
-from config import SOS, EOS, PAD, UNK
-
-
-def get_device():
-    return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+from config import SOS, EOS, PAD, UNK, get_device
 
 
 def scaled_dot_product(q: Tensor, k: Tensor, v: Tensor, mask: Tensor = None):
