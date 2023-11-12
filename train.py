@@ -679,20 +679,13 @@ def train_model7(config: dict):
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
         for batch_num, batch in enumerate(batch_iterator):
             data, targets = batch
-            print("==================")
-            print("IN")
-            # src: Tensor, shape ``[seq_len, batch_size]``
+            data = data.squeeze(0)
+            targets = targets.squeeze(0)
+            # data: Tensor, shape ``[seq_len, batch_size]``
             # src_mask: Tensor, shape ``[seq_len, seq_len]``
             # output Tensor of shape ``[seq_len, batch_size, ntoken]``
-            print(data.shape)
             output = transformer(data)
-            print("OUT")
-            print(output.shape)
             output_flat = output.view(-1, tokenizer_tgt.get_vocab_size())
-            print("FLAT")
-            print(output_flat.shape)
-            print("TARGET")
-            print(targets.shape)
             loss = loss_fn(output_flat, targets)
 
             optimizer.zero_grad()

@@ -12,7 +12,7 @@
 # Along with the input sequence, a square attention mask is required because the
 # self-attention layers in ``nn.TransformerDecoder`` are only allowed to attend
 # the earlier positions in the sequence. For the language modeling task, any
-# tokens on the future positions should be masked.  This masking, combined with fact that 
+# tokens on the future positions should be masked.  This masking, combined with fact that
 # the output embeddings are offset with later positions ensures that the
 # predictions for position i can depend only on the known outputs at positions less than i.
 # To produce a probability  distribution over output words, the output of the ``nn.TransformerEncoder``
