@@ -651,6 +651,7 @@ def train_model7(config: dict):
     optimizer = torch.optim.SGD(transformer.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 
+    best_val_loss = float('inf')
     total_loss = 0
     initial_epoch = 0
     global_step = 0
@@ -707,10 +708,8 @@ def train_model7(config: dict):
             global_step += 1
 
         # Run validation at the end of each epoch
-        val_loss = 0
-        # val_loss = (model, val_data)
-        # val_loss = validate_model7(transformer, val_dataloader, index_to_tgt,
-        #                           config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+        val_loss = float(0)
+        val_loss = validate_model7(transformer, val_dataloader, tokenizer_tgt.get_vocab_size(), device)
 
         val_ppl = math.exp(val_loss)
         elapsed = time.time() - epoch_start_time
@@ -735,40 +734,33 @@ def train_model7(config: dict):
     # print(f'| End of training | test loss {test_loss:5.2f} | ' f'test ppl {test_ppl:8.2f}')
 
 
-def validate_model7(transformer: Transformer7, validation_ds: DataLoader, index_to_tgt: dict,
-                    max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
+def validate_model7(transformer: Transformer7, validation_ds: DataLoader, ntokens: int, device):
 
-    transformer.eval()
-    count = 0
-
-    source_texts = []
-    expected = []
-    predicted = []
-
-    console_width = get_console_width()
-
-    # with torch.no_grad():
-    #     for batch in validation_ds:
-    #         count += 1
-
-    #         if count == num_examples:
-    #             print_msg('-' * console_width)
-    #             break
-
-    model.eval()  # turn on evaluation mode
+    transformer.eval()  # turn on evaluation mode
     total_loss = 0.
+
+    criterion = nn.CrossEntropyLoss()
+
     with torch.no_grad():
-        for i in range(0, eval_data.size(0) - 1, bptt):
-            data, targets = get_batch(eval_data, i)
+        for batch_num, batch in enumerate(validation_ds):
+            # count += 1
+            data, targets = batch
+            data = data.squeeze(0).to(device)
+            targets = targets.squeeze(0).to(device)
+
             seq_len = data.size(0)
-            output = model(data)
+            output = transformer(data)
             output_flat = output.view(-1, ntokens)
             total_loss += seq_len * criterion(output_flat, targets).item()
 
-    if writer:
-        collect_training_metrics(writer, predicted, expected, global_step)
+            # Print the message to the console without interfering with the progress bar
+            # print_msg('-' * console_width)
 
-    return total_loss / (len(eval_data) - 1)
+            # if count == num_examples:
+            #    print_msg('-' * console_width)
+            #    break
+
+    return total_loss / (len(validation_ds) - 1)
 
 
 def main(argv):
