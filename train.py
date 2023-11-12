@@ -33,6 +33,7 @@ from model4 import Transformer4, build_transformer4
 from model5 import Transformer5, build_transformer5
 from model6 import Transformer6, build_transformer6
 from model7 import Transformer7, build_transformer7
+from model8 import Transformer8, build_transformer8
 
 
 def collect_training_metrics(writer, predicted, expected, global_step):
@@ -136,7 +137,13 @@ def build_model7(config: dict, vocab_tgt_len: int) -> Transformer7:
     return model
 
 
-def validate_model1(model: Transformer1, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
+def build_model8(config: dict, vocab_tgt_len: int) -> Transformer8:
+    model = build_transformer8(vocab_tgt_len,
+                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    return model
+
+
+def evaluate_model1(model: Transformer1, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
                     max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
     model.eval()
     count = 0
@@ -265,7 +272,7 @@ def train_model1(config: dict):
             global_step += 1
 
         # Run validation at the end of each epoch
-        validate_model1(model, val_dataloader, tokenizer_src, tokenizer_tgt,
+        evaluate_model1(model, val_dataloader, tokenizer_src, tokenizer_tgt,
                         config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Save the model at the end of every epoch
@@ -351,7 +358,7 @@ def train_model2(config: dict):
         save_model(config, model, optimizer, epoch, global_step)
 
 
-def validate_model3(model: Transformer3, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
+def evaluate_model3(model: Transformer3, validation_ds: DataLoader, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
                     max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
     model.eval()
     count = 0
@@ -584,18 +591,18 @@ def train_model6(config: dict):
                 batch_iterator.write('-' * console_width)
 
             # if batch_num % 20 == 0:
-            #     validate_model6(transformer, val_dataloader, index_to_tgt,
+            #     evaluate_model6(transformer, val_dataloader, index_to_tgt,
             #                     config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Run validation at the end of each epoch
-        validate_model6(transformer, val_dataloader, index_to_tgt,
+        evaluate_model6(transformer, val_dataloader, index_to_tgt,
                         config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Save the model at the end of every epoch
         save_model(config, transformer, optimizer, epoch, global_step)
 
 
-def validate_model6(transformer: Transformer6, validation_ds: DataLoader, index_to_tgt: dict,
+def evaluate_model6(transformer: Transformer6, validation_ds: DataLoader, index_to_tgt: dict,
                     max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2):
 
     transformer.eval()
@@ -709,7 +716,7 @@ def train_model7(config: dict):
 
         # Run validation at the end of each epoch
         val_loss = float(0)
-        val_loss = validate_model7(transformer, val_dataloader, tokenizer_tgt.get_vocab_size(), device)
+        val_loss = evaluate_model7(transformer, val_dataloader, tokenizer_tgt.get_vocab_size(), device)
 
         val_ppl = math.exp(val_loss)
         elapsed = time.time() - epoch_start_time
@@ -734,7 +741,7 @@ def train_model7(config: dict):
     # print(f'| End of training | test loss {test_loss:5.2f} | ' f'test ppl {test_ppl:8.2f}')
 
 
-def validate_model7(transformer: Transformer7, validation_ds: DataLoader, ntokens: int, device):
+def evaluate_model7(transformer: Transformer7, validation_ds: DataLoader, ntokens: int, device):
 
     transformer.eval()  # turn on evaluation mode
     total_loss = 0.
@@ -761,6 +768,72 @@ def validate_model7(transformer: Transformer7, validation_ds: DataLoader, ntoken
             #    break
 
     return total_loss / (len(validation_ds) - 1)
+
+
+def train_model8(config: dict):
+    # hyperparameters
+    batch_size = 16  # how many independent sequences will we process in parallel?
+    block_size = 32  # what is the maximum context length for predictions?
+    max_iters = 5000
+    eval_interval = 100
+    learning_rate = 1e-3
+    eval_iters = 200
+    n_embd = 64
+    n_head = 4
+    n_layer = 4
+    dropout = 0.0
+    # ------------
+
+    torch.manual_seed(1337)
+
+    device = get_device()
+
+    model_folder = get_model_folder(config)
+    Path(model_folder).mkdir(parents=True, exist_ok=True)
+
+    train_dataloader, val_dataloader, test_dataloader, tokenizer_tgt = get_ds8(config, model_folder)
+    model = build_model8(config, tokenizer_tgt.get_vocab_size()).to(device)
+    m = model.to(device)
+    # print the number of parameters in the model
+    print(sum(p.numel() for p in m.parameters())/1e6, 'M parameters')
+
+    # create a PyTorch optimizer
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
+
+    for iter in range(max_iters):
+
+        # every once in a while evaluate the loss on train and val sets
+        if iter % eval_interval == 0 or iter == max_iters - 1:
+            losses = evaluate_model8(model, eval_iters)
+            print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+
+        # sample a batch of data
+        xb, yb = get_batch('train')
+
+        # evaluate the loss
+        logits, loss = model(xb, yb)
+        optimizer.zero_grad(set_to_none=True)
+        loss.backward()
+        optimizer.step()
+
+    # generate from the model
+    context = torch.zeros((1, 1), dtype=torch.long, device=device)
+    print(decode(m.generate(context, max_new_tokens=2000)[0].tolist()))
+
+
+@torch.no_grad()
+def evaluate_model8(model, eval_iters):
+    out = {}
+    model.eval()
+    for split in ['train', 'val']:
+        losses = torch.zeros(eval_iters)
+        for k in range(eval_iters):
+            X, Y = get_batch(split)
+            logits, loss = model(X, Y)
+            losses[k] = loss.item()
+        out[split] = losses.mean()
+    model.train()
+    return out
 
 
 def main(argv):
@@ -798,6 +871,8 @@ def main(argv):
             train_model6(config)
         case "model7":
             train_model7(config)
+        case "model8":
+            train_model8(config)
         case _:
             train_model1(config)
 
