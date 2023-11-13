@@ -5,11 +5,14 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+# JEB: Ugly but will do for right now
+from config import get_device
+device = get_device()
 
 class Head(nn.Module):
     """ one head of self-attention """
 
-    def __init__(self, head_size: int, n_embd: int, dropout: float):
+    def __init__(self, head_size: int, n_embd: int, block_size: int, dropout: float):
         super().__init__()
         self.key = nn.Linear(n_embd, head_size, bias=False)
         self.query = nn.Linear(n_embd, head_size, bias=False)
@@ -36,9 +39,9 @@ class Head(nn.Module):
 class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
 
-    def __init__(self, num_heads: int, head_size: int, n_embd: int, dropout: float):
+    def __init__(self, num_heads: int, head_size: int, n_embd: int, block_size: int, dropout: float):
         super().__init__()
-        self.heads = nn.ModuleList([Head(head_size, n_embd, dropout) for _ in range(num_heads)])
+        self.heads = nn.ModuleList([Head(head_size, n_embd, block_size, dropout) for _ in range(num_heads)])
         self.proj = nn.Linear(n_embd, n_embd)
         self.dropout = nn.Dropout(dropout)
 
@@ -67,11 +70,11 @@ class FeedFoward(nn.Module):
 class Block(nn.Module):
     """ Transformer block: communication followed by computation """
 
-    def __init__(self, n_embd: int, n_head: int, dropout: float):
+    def __init__(self, n_embd: int, n_head: int, block_size: int, dropout: float):
         # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
         head_size = n_embd // n_head
-        self.sa = MultiHeadAttention(n_head, head_size, n_embd, dropout)
+        self.sa = MultiHeadAttention(n_head, head_size, n_embd, block_size, dropout)
         self.ffwd = FeedFoward(n_embd, dropout)
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
@@ -86,18 +89,18 @@ class Block(nn.Module):
 
 class Transformer8(nn.Module):
 
-    def __init__(self, vocab_size: int, n_embd: int, n_layer: int, n_head: int, dropout: float):
+    def __init__(self, vocab_size: int, n_embd: int, n_layer: int, n_head: int, block_size: int, dropout: float):
         super().__init__()
         # each token directly reads off the logits for the next token from a lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
         self.position_embedding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.Sequential(*[Block(n_embd, n_head=n_head) for _ in range(n_layer)])
+        self.blocks = nn.Sequential(*[Block(n_embd, n_head=n_head, block_size=block_size, dropout=dropout) for _ in range(n_layer)])
         self.ln_f = nn.LayerNorm(n_embd)  # final layer norm
         self.lm_head = nn.Linear(n_embd, vocab_size)
+        self.block_size = block_size
 
     def forward(self, idx, targets=None):
         B, T = idx.shape
-
         # idx and targets are both (B,T) tensor of integers
         tok_emb = self.token_embedding_table(idx)  # (B,T,C)
         pos_emb = self.position_embedding_table(torch.arange(T, device=device))  # (T,C)
@@ -120,7 +123,7 @@ class Transformer8(nn.Module):
         # idx is (B, T) array of indices in the current context
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
-            idx_cond = idx[:, -block_size:]
+            idx_cond = idx[:, -self.block_size:]
             # get the predictions
             logits, loss = self(idx_cond)
             # focus only on the last time step
@@ -134,11 +137,11 @@ class Transformer8(nn.Module):
         return idx
 
 
-def build_transformer8(tgt_vocab_size: int, d_model: int = 200, N: int = 2, h: int = 2, dropout: float = 0.2, d_ff: int = 200) -> Transformer8:
+def build_transformer8(tgt_vocab_size: int, d_model: int = 200, N: int = 2, h: int = 2, block_size: int = 32, dropout: float = 0.2, d_ff: int = 200) -> Transformer8:
 
     # Create the transformer
     transformer = Transformer8(vocab_size=tgt_vocab_size, n_embd=d_model, n_head=h,
-                               d_hid=d_ff, n_layer=N, dropout=dropout)
+                               n_layer=N, block_size=block_size, dropout=dropout)
 
     # When computing the loss, we are ignoring cases when the label is the padding token
     # for params in transformer.parameters():

@@ -1,0 +1,17 @@
+N: 4
+alt_model: model8
+batch_size: 16
+d_ff: 1024
+d_model: 64
+datasource: tinyshakespeare
+dropout: 0.0
+experiment_name: runs/tmodel
+h: 4
+lang_src: en
+lang_tgt: en
+lr: 0.001
+model_basename: tmodel_
+num_epochs: 3
+preload: latest
+seq_len: 80
+tokenizer_file: tokenizer_{0}

@@ -22,14 +22,15 @@ def get_default_config() -> dict:
         "dropout": 10**-1,
         "d_ff": 1024,  # paper 2048,
         # "datasource": 'opus_books',
-        "datasource": 'translate',
+        # "datasource": 'translate',
+        "datasource": 'tinyshakespeare',
         "lang_src": "en",
-        "lang_tgt": "fr",
+        "lang_tgt": "en",
         "model_basename": "tmodel_",
         "preload": "latest",  # Possible values: None, "02", "latest"
         "tokenizer_file": "tokenizer_{0}",
         "experiment_name": "runs/tmodel",
-        "alt_model": "model7"  # Possible values: None, model1, model2
+        "alt_model": "model8"  # Possible values: None, model1, model2
     }
 
 

@@ -45,6 +45,10 @@ class Dataset7(Dataset):
         Returns:
             Tensor of shape ``[N // bsz, bsz]``
         """
+        # Given a 1-D vector of sequential data, batchify() arranges the data into bsz/batch_size columns. 
+        # If the data does not divide evenly into bsz columns, then the data is trimmed to fit. 
+        # For instance, with the alphabet as the data (total length of 26) and bsz=4, we would divide the 
+        # alphabet into sequences/rows of length 6, resulting in 4 columns of such sequences/rows.
         seq_len = processed_data.size(0) // bsz
         batchified_data = processed_data[:seq_len * bsz]
         batchified_data = batchified_data.view(bsz, seq_len).t().contiguous()
@@ -64,14 +68,25 @@ class Dataset7(Dataset):
             tuple (data, target), where data has shape ``[seq_len, batch_size]`` and
             target has shape ``[seq_len * batch_size]``
         """
+        # From row i, the next bptt rows in each columns. bsz=4, and bptt=2
+        # According to explanation this would return row (A,G,M,S) and (B,H,N,T)
+        # The other explantion is that is picks bsz=4 contexts of length bptt=2
         seq_len = min(self.bptt, len(self.batchified_data) - 1 - i)
         data = self.batchified_data[i:i+seq_len]
+        # From row i+1, the next bptt rows in each columns
+        # According to explanation this would return row (B,H,N,T) and (C,I,O,U)
+        # The target is always the context+1
+        # Then flat out the bsz * bptt matrix
         target = self.batchified_data[i+1:i+1+seq_len].reshape(-1)
         return data, target
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
+        # JEB: This is a hack. The data is already organized in columns/batch.
+        # JEB: The current batch size passed to the dataloader is set to 1
+        # JEB: Seems that the batck size passed to the dataloader is in fact bptt
+        # JEB: The code bellow could make work if the reshape is done out the iternator call
         # data = self.batchified_data[idx]
-        # target = self.batchified_data[idx+1].reshape(-1)
+        # target = self.batchified_data[idx+1]
         # return data, target
         return self.get_batch(idx)
 
