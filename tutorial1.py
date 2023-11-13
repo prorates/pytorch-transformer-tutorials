@@ -211,7 +211,7 @@ def translate1(config: dict, sentence: str):
     print(f"{'Prediction: ':>15}{model_out_text}")
     return model_out_text
 
-def test_model1(config: dict, device):
+def debug_code_model1(config: dict, device):
     config['model'] = "model1"
     config['datasource'] = "opus_books"
     config['lang_src'] = "en"
@@ -231,5 +231,5 @@ if __name__ == '__main__':
     # warnings.filterwarnings('ignore')
     config = get_config()
     device = get_device()
-    test_model1(config, device)
+    debug_code_model1(config, device)
 

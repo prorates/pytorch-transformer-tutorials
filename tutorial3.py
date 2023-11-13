@@ -167,7 +167,7 @@ def translate3(config: dict, sentence: str):
     # if the sentence is a number use it as an index to the test set
     # run_translation(label, sentence, model, tokenizer_src, tokenizer_tgt, config['seq_len'], device)
 
-def test_model3(config: dict, device):
+def debug_code_model3(config: dict, device):
     config['model'] = "model3"
     config['datasource'] = "translate"
     config['lang_src'] = "en"
@@ -187,6 +187,6 @@ if __name__ == '__main__':
     # warnings.filterwarnings('ignore')
     config = get_config()
     device = get_device()
-    test_model3(config, device)
+    debug_code_model3(config, device)
 
 

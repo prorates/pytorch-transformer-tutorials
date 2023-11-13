@@ -87,7 +87,7 @@ def translate8(config: dict, sentence: str):
 
     raise RuntimeError("Not implemented yet")
 
-def test_model8(config: dict, device):
+def debug_code_model8(config: dict, device):
     config['model'] = "model7"
     config['datasource'] = "translate"
     config['lang_src'] = "en"
@@ -107,4 +107,4 @@ if __name__ == '__main__':
     # warnings.filterwarnings('ignore')
     config = get_config()
     device = get_device()
-    test_model8(config, device)
+    debug_code_model8(config, device)

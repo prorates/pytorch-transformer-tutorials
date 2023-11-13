@@ -178,7 +178,7 @@ def translate6(config: dict, sentence: str):
     print(f"{'Prediction: ':>15}{output_text}")
     return output_text
 
-def test_model6(config: dict, device):
+def debug_code_model6(config: dict, device):
     config['model'] = "model6"
     config['datasource'] = "translate"
     config['lang_src'] = "en"
@@ -198,4 +198,4 @@ if __name__ == '__main__':
     # warnings.filterwarnings('ignore')
     config = get_config()
     device = get_device()
-    test_model6(config, device)
+    debug_code_model6(config, device)
