@@ -101,6 +101,12 @@ def get_ds8(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
 
     return train_dataloader, val_dataloader, tokenizer
 
+def get_testing_ds8(config: dict, model_folder: str) -> Tokenizer:
+
+    # build tokenizers
+    tokenizer = get_tokenizer8(config, model_folder, config['lang_src'])
+
+    return tokenizer
 
 def local_testing():
 

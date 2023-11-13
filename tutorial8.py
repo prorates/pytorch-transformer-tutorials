@@ -8,9 +8,9 @@ import torch
 from tqdm import tqdm
 
 from config import get_config, get_device, get_model_folder
-from dataset8 import get_ds8
+from dataset8 import get_ds8, get_testing_ds8
 from model8 import Transformer8, build_transformer8
-from utils import reload_model, save_model
+from utils import reload_model, save_model, load_trained_model
 
 
 def build_model8(config: dict, vocab_tgt_len: int) -> Transformer8:
@@ -60,14 +60,14 @@ def train_model8(config: dict):
 
             # every once in a while evaluate the loss on train and val sets
             if (iter % eval_interval == 0 or iter == max_iters - 1) and (iter > 0):
-                losses = evaluate_model8(transformer, val_dataloader, eval_iters)
+                losses = evaluate_model8(transformer, val_dataloader, eval_iters, device)
                 batch_iterator.write(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
             # sample a batch of data
             xb, yb = batch
 
             # evaluate the loss
-            logits, loss = transformer(xb, yb)
+            logits, loss = transformer(xb.to(device), yb.to(device))
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
@@ -82,7 +82,7 @@ def train_model8(config: dict):
 
 
 @torch.no_grad()
-def evaluate_model8(transformer: Transformer8, validation_ds, eval_iters):
+def evaluate_model8(transformer: Transformer8, validation_ds, eval_iters, device):
     out = {'train':0, 'val': 0}
     transformer.eval()
     # for split in ['train', 'val']:
@@ -98,7 +98,7 @@ def evaluate_model8(transformer: Transformer8, validation_ds, eval_iters):
         if k == eval_iters:
             break
         X, Y = batch
-        logits, loss = transformer(X, Y)
+        logits, loss = transformer(X.to(device), Y.to(device))
         losses[k] = loss.item()
     out['val'] = losses.mean()
     transformer.train()
@@ -111,7 +111,15 @@ def translate8(config: dict, sentence: str):
     if not Path.exists(Path(model_folder)):
         raise ValueError(f"{model_folder} model_folder does not exist")
 
-    raise RuntimeError("Not implemented yet")
+    tokenizer = get_testing_ds8(config, model_folder)
+    model = build_model8(config, tokenizer.get_vocab_size()).to(device)
+
+    # Load the pretrained weights
+    model = load_trained_model(config, model)
+
+    # generate from the model
+    context = torch.zeros((1, 1), dtype=torch.long, device=device)
+    print(tokenizer.decode(model.generate(context, max_new_tokens=2000)[0].tolist()))
 
 def debug_code_model8(config: dict, device):
     config['model'] = "model7"
