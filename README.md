@@ -37,7 +37,8 @@ See [Huggineface Transformer Tutorial](https://pytorch.org/tutorials/beginner/tr
 
 ## Model 8
 
-See [video](https://youtu.be/9uw3F6rndnA)
+See [video](https://youtu.be/kCc8FmEb1nY)
+The colab repo is [here](https://colab.research.google.com/drive/1JMLa53HDuA-i7ZBmqV7ZnA3c_fvtXnx-?usp=sharing)
 
 ## Size requirements
 

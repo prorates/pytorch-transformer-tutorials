@@ -1,3 +1,5 @@
+# Builld a GPT from scratch [video][https://youtu.be/kCc8FmEb1nY]
+
 from pathlib import Path
 
 

@@ -1,3 +1,6 @@
+# The code was copy pasted from [here](https://towardsdatascience.com/build-your-own-transformer-from-scratch-using-pytorch-84c850470dcb)
+# The same code seems available [here](https://www.datacamp.com/tutorial/building-a-transformer-with-py-torch)
+
 from pathlib import Path
 
 import torch

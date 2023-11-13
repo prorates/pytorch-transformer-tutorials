@@ -1,3 +1,4 @@
+# Builld a GPT from scratch [video][https://youtu.be/kCc8FmEb1nY]
 
 import math
 import torch

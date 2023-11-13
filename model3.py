@@ -1,3 +1,5 @@
+# The source code seems to be [here](https://github.com/SamLynnEvans/Transformer?ref=blog.floydhub.com)
+
 import torch
 import torch.nn as nn
 import math

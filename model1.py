@@ -1,3 +1,6 @@
+# This is based on the following [video](https://youtu.be/ISNdQcPhsts)
+# The code is original code is available [here](https://github.com/hkproj/pytorch-transformer)
+
 import torch
 import torch.nn as nn
 import math

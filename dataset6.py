@@ -1,3 +1,6 @@
+# This is based on the following [video](https://www.youtube.com/playlist?list=PLTl9hO2Oobd97qfWC40gOSU8C0iu0m2l4)
+# The code is original code is available [here](https://github.com/ajhalthor/Transformer-Neural-Network)
+
 import torch
 from torch import Tensor
 from torch.utils.data import Dataset, DataLoader, random_split

@@ -1,3 +1,7 @@
+# See [video](https://youtu.be/kCc8FmEb1nY)
+# The colab repo is [here](https://colab.research.google.com/drive/1JMLa53HDuA-i7ZBmqV7ZnA3c_fvtXnx-?usp=sharing)
+
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
