@@ -23,14 +23,25 @@ class Head(nn.Module):
 
     def forward(self, x):
         B, T, C = x.shape
+        # Every single node is emiting a query and a key vector.
+        # The Query vector is what I'm looking for.
+        # The Key vector is what do I contain.
         k = self.key(x)   # (B,T,C)
         q = self.query(x)  # (B,T,C)
         # compute attention scores ("affinities")
+        # The dot product between the key and the query. My query time the dot product of all the other tokens.
+        # If the key and query are aligned, they will interact for a higher amount, and I'll learn about that
+        # specific token. 
+        # We need to transpose the key but k has three dimensions. We only want to transpose the two last
+        # dimensions.
         wei = q @ k.transpose(-2, -1) * C**-0.5  # (B, T, C) @ (B, C, T) -> (B, T, T)
+        # We apply the upper triangular mask. Remove communications with future nodes.
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))  # (B, T, T)
+        # We exponentiate and normalize. Each line has it sums of values . Remove communications with future nodes.
         wei = F.softmax(wei, dim=-1)  # (B, T, T)
         wei = self.dropout(wei)
-        # perform the weighted aggregation of the values
+        # perform the weighted aggregation of the values.
+        # x is the private information to this token. v is what I will communicate if you pesk me.
         v = self.value(x)  # (B,T,C)
         out = wei @ v  # (B, T, T) @ (B, T, C) -> (B, T, C)
         return out
@@ -57,6 +68,7 @@ class FeedFoward(nn.Module):
     def __init__(self, n_embd: int, dropout: float):
         super().__init__()
         self.net = nn.Sequential(
+            # DFF is 4 time n_embd
             nn.Linear(n_embd, 4 * n_embd),
             nn.ReLU(),
             nn.Linear(4 * n_embd, n_embd),
@@ -80,6 +92,8 @@ class Block(nn.Module):
         self.ln2 = nn.LayerNorm(n_embd)
 
     def forward(self, x):
+        # JEB: This is one of the only that changed compared to the original
+        # paper. The normalization is made first in this model.
         x = x + self.sa(self.ln1(x))
         x = x + self.ffwd(self.ln2(x))
         return x
@@ -104,6 +118,8 @@ class Transformer8(nn.Module):
         # idx and targets are both (B,T) tensor of integers
         tok_emb = self.token_embedding_table(idx)  # (B,T,C)
         pos_emb = self.position_embedding_table(torch.arange(T, device=device))  # (T,C)
+        # JEB: Broadcasting. pos_emb gets right-aligned, a new dimension is added
+        # and it gets added accross batch.
         x = tok_emb + pos_emb  # (B,T,C)
         x = self.blocks(x)  # (B,T,C)
         x = self.ln_f(x)  # (B,T,C)
@@ -112,6 +128,8 @@ class Transformer8(nn.Module):
         if targets is None:
             loss = None
         else:
+            #JEB: Interesting. This model computes the loss
+            #in the forward method.
             B, T, C = logits.shape
             logits = logits.view(B*T, C)
             targets = targets.view(B*T)
@@ -124,7 +142,7 @@ class Transformer8(nn.Module):
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
             idx_cond = idx[:, -self.block_size:]
-            # get the predictions
+            # get the predictions. (We invoke forward here with a target)
             logits, loss = self(idx_cond)
             # focus only on the last time step
             logits = logits[:, -1, :]  # becomes (B, C)
@@ -137,7 +155,7 @@ class Transformer8(nn.Module):
         return idx
 
 
-def build_transformer8(tgt_vocab_size: int, d_model: int = 200, N: int = 2, h: int = 2, block_size: int = 32, dropout: float = 0.2, d_ff: int = 200) -> Transformer8:
+def build_transformer8(tgt_vocab_size: int, d_model: int = 64, N: int = 4, h: int = 4, block_size: int = 32, dropout: float = 0.0, d_ff: int = 256) -> Transformer8:
 
     # Create the transformer
     transformer = Transformer8(vocab_size=tgt_vocab_size, n_embd=d_model, n_head=h,

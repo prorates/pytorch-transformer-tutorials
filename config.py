@@ -13,6 +13,7 @@ PAD = '<pad>'
 def get_default_config() -> dict:
     return {
         "batch_size": 8,
+        "block_size": 32, # Added for model2
         "num_epochs": 20,
         "lr": 10**-4,
         "seq_len": 80,
@@ -20,7 +21,7 @@ def get_default_config() -> dict:
         "N": 6,  # paper: 6,
         "h": 8,  # paper: 8,
         "dropout": 10**-1,
-        "d_ff": 1024,  # paper 2048,
+        "d_ff": 1024,  # paper 2048, # supposed to be "4*d_model"
         # "datasource": 'opus_books',
         # "datasource": 'translate',
         "datasource": 'tinyshakespeare',

@@ -15,7 +15,7 @@ from utils import reload_model, save_model, load_trained_model
 
 def build_model8(config: dict, vocab_tgt_len: int) -> Transformer8:
     model = build_transformer8(vocab_tgt_len,
-                               d_model=config['d_model'], N=config['N'], h=config['h'], block_size=32, dropout=config['dropout'], d_ff=config['d_ff'])
+                               d_model=config['d_model'], N=config['N'], h=config['h'], block_size=config['block_size'], dropout=config['dropout'], d_ff=config['d_ff'])
     return model
 
 
