@@ -21,8 +21,8 @@ class Dataset8(Dataset):
         super().__init__()
 
         self.processed_data: Tensor = self.data_process(raw_text, tokenizer)
-        self.block_size = block_size
-        self.batch_size = batch_size
+        self.block_size: int = block_size
+        self.batch_size: int = batch_size
 
     def data_process(self, raw_text: str, tokenizer: Tokenizer):
         """Converts raw text into a flat Tensor."""
@@ -79,7 +79,7 @@ def load_custom_dataset(config: dict, model_folder: str) -> str:
     return src_sentences
 
 
-def get_ds8(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer]:
+def get_ds8(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Dataset8, Dataset8]:
 
     raw_text = load_custom_dataset(config, model_folder)
     tokenizer = get_or_build_tokenizer8(config, model_folder, raw_text, config['lang_src'])
@@ -92,14 +92,17 @@ def get_ds8(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
     n = int(0.9*len(raw_text))  # first 90% will be train, rest val
 
     batch_size = config['batch_size']
-    block_size = 32  # what is the maximum context length for predictions?
+    block_size = config['block_size']  # what is the maximum context length for predictions?
     train_ds = Dataset8(raw_text[:n], tokenizer=tokenizer, batch_size=batch_size, block_size=block_size)
     val_ds = Dataset8(raw_text[n:], tokenizer=tokenizer, batch_size=batch_size, block_size=block_size)
 
-    train_dataloader = DataLoader(train_ds, shuffle=True, batch_size=batch_size)
+    # train_dataloader = DataLoader(train_ds, shuffle=True, batch_size=batch_size)
+    # val_dataloader = DataLoader(val_ds, 1)
+    train_dataloader = DataLoader(train_ds, batch_size=batch_size)
     val_dataloader = DataLoader(val_ds, 1)
 
-    return train_dataloader, val_dataloader, tokenizer
+    return train_dataloader, val_dataloader, tokenizer, train_ds, val_ds
+
 
 def get_testing_ds8(config: dict, model_folder: str) -> Tokenizer:
 
@@ -108,9 +111,28 @@ def get_testing_ds8(config: dict, model_folder: str) -> Tokenizer:
 
     return tokenizer
 
+
+def local_tokenizer(text: str):
+    # here are all the unique characters that occur in this text
+    chars = sorted(list(set(text)))
+    vocab_size = len(chars)
+    # create a mapping from characters to integers
+    stoi = {ch: i for i, ch in enumerate(chars)}
+    itos = {i: ch for i, ch in enumerate(chars)}
+    def encode(s): return [stoi[c] for c in s]  # encoder: take a string, output a list of integers
+    def decode(l): return ''.join([itos[i] for i in l])  # decoder: take a list of integers, output a string
+
+    # Train and test splits
+    data = torch.tensor(encode(text), dtype=torch.long)
+    n = int(0.9*len(data))  # first 90% will be train, rest val
+    train_data = data[:n]
+    val_data = data[n:]
+    return train_data, val_data
+
+
 def local_testing():
 
-    config = get_config()
+    config = get_config(modelfolder="tinyshakespeare_en_en_model8")
     modelfolder = get_model_folder(config)
     raw_text = load_custom_dataset(config, modelfolder)
 
@@ -120,25 +142,34 @@ def local_testing():
     n = int(0.9*len(raw_text))  # first 90% will be train, rest val
 
     torch.manual_seed(1337)
-    batch_size = 4
-    block_size = 8
+
+    batch_size = config['batch_size']
+    block_size = config['block_size']
+
+    local_train_data, local_val_data = local_tokenizer(raw_text)
+    print(local_train_data[:256])
+
     train_ds = Dataset8(raw_text[:n], tokenizer=tokenizer, batch_size=batch_size, block_size=block_size)
     val_ds = Dataset8(raw_text[n:], tokenizer=tokenizer, batch_size=batch_size, block_size=block_size)
     train_dataloader = DataLoader(train_ds, shuffle=True, batch_size=batch_size)
+    print(train_ds.processed_data[:256])
+    print(raw_text[:256])
+    print(tokenizer.decode(train_ds.processed_data[:256].tolist()))
+
     for batch_num, batch_iterator in enumerate(train_dataloader):
         xb, yb = batch_iterator
         print("inputs:")
         print(xb.shape)
-        print(xb)
+        # print(xb)
         print("target:")
         print(yb.shape)
-        print(yb)
+        # print(yb)
 
-        for b in range(batch_size):  # batch dimension
-            for t in range(block_size):  # time dimension
-                context = xb[b, :t+1]
-                target = yb[b, t]
-                print(f"when input is {context.tolist()} the target: {target}")
+        # for b in range(batch_size):  # batch dimension
+        #     for t in range(block_size):  # time dimension
+        #         context = xb[b, :t+1]
+        #         target = yb[b, t]
+        #         print(f"when input is {context.tolist()} the target: {target}")
 
         if (batch_num == 0):
             break

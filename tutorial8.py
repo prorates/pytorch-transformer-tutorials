@@ -5,10 +5,11 @@ import time
 from pathlib import Path
 
 import torch
+from torch.utils.data import DataLoader 
 from tqdm import tqdm
 
 from config import get_config, get_device, get_model_folder
-from dataset8 import get_ds8, get_testing_ds8
+from dataset8 import get_ds8, get_testing_ds8, Dataset8
 from model8 import Transformer8, build_transformer8
 from utils import reload_model, save_model, load_trained_model
 
@@ -35,7 +36,7 @@ def train_model8(config: dict):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    train_dataloader, val_dataloader, tokenizer_tgt = get_ds8(config, model_folder)
+    train_dataloader, val_dataloader, tokenizer_tgt, train_ds, val_ds = get_ds8(config, model_folder)
     transformer = build_model8(config, tokenizer_tgt.get_vocab_size()).to(device)
 
     # print the number of parameters in the model
@@ -54,17 +55,19 @@ def train_model8(config: dict):
         transformer.train()  # moved inside for run_validation at each step
 
         batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
-        for iter, batch in enumerate(batch_iterator):
-            if (iter == max_iters):
-                break
+        # for iter, batch in enumerate(batch_iterator):
+        #     if (iter == max_iters):
+        #         break
+        for iter in range(max_iters):
 
             # every once in a while evaluate the loss on train and val sets
             if (iter % eval_interval == 0 or iter == max_iters - 1) and (iter > 0):
-                losses = evaluate_model8(transformer, val_dataloader, eval_iters, device)
+                losses = evaluate_model8(transformer, val_dataloader, eval_iters, device, train_ds, val_ds)
                 batch_iterator.write(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
 
             # sample a batch of data
-            xb, yb = batch
+            # xb, yb = batch
+            xb, yb = train_ds.get_batch()
 
             # evaluate the loss
             logits, loss = transformer(xb.to(device), yb.to(device))
@@ -82,25 +85,29 @@ def train_model8(config: dict):
 
 
 @torch.no_grad()
-def evaluate_model8(transformer: Transformer8, validation_ds, eval_iters, device):
+def evaluate_model8(transformer: Transformer8, val_dataloader: DataLoader, eval_iters: int, device, train_ds: Dataset8, val_ds: Dataset8):
+
     out = {'train':0, 'val': 0}
     transformer.eval()
-    # for split in ['train', 'val']:
-    #     losses = torch.zeros(eval_iters)
-    #     for k in range(eval_iters):
-    #         X, Y = get_batch(split)
-    #         logits, loss = transformer(X, Y)
-    #         losses[k] = loss.item()
-    #     out[split] = losses.mean()
-    losses = torch.zeros(eval_iters)
-    # for k in range(eval_iters):
-    for k, batch in enumerate(validation_ds):
-        if k == eval_iters:
-            break
-        X, Y = batch
-        logits, loss = transformer(X.to(device), Y.to(device))
-        losses[k] = loss.item()
-    out['val'] = losses.mean()
+
+    tmp = {'train':train_ds, 'val': val_ds}
+    for key, value in tmp.items():
+        losses = torch.zeros(eval_iters)
+        for k in range(eval_iters):
+            X, Y = value.get_batch()
+            logits, loss = transformer(X, Y)
+            losses[k] = loss.item()
+        out[key] = losses.mean()
+
+    # losses = torch.zeros(eval_iters)
+    # for k, batch in enumerate(val_dataloader):
+    #     if k == eval_iters:
+    #         break
+    #     X, Y = batch
+    #     logits, loss = transformer(X.to(device), Y.to(device))
+    #     losses[k] = loss.item()
+    # out['val'] = losses.mean()
+
     transformer.train()
     return out
 
@@ -130,7 +137,7 @@ def debug_code_model8(config: dict, device):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    train_dataloader, val_dataloader, test_dataloader, tokenizer_tgt = get_ds8(config, model_folder)
+    train_dataloader, val_dataloader, test_dataloader, tokenizer_tgt, train_ds, val_ds = get_ds8(config, model_folder)
     model = build_model8(config, tokenizer_tgt.get_vocab_size()).to(device)
 
     print(model)
