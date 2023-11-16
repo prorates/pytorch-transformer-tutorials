@@ -95,7 +95,7 @@ def evaluate_model8(transformer: Transformer8, val_dataloader: DataLoader, eval_
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = value.get_batch()
-            logits, loss = transformer(X, Y)
+            logits, loss = transformer(X.to(device), Y.to(device))
             losses[k] = loss.item()
         out[key] = losses.mean()
 
