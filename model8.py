@@ -7,17 +7,19 @@ from torch.nn import functional as F
 
 # JEB: Ugly but will do for right now
 from config import get_device
+
 device = get_device()
 
+
 class Head(nn.Module):
-    """ one head of self-attention """
+    """one head of self-attention"""
 
     def __init__(self, head_size: int, n_embd: int, block_size: int, dropout: float):
         super().__init__()
         self.key = nn.Linear(n_embd, head_size, bias=False)
         self.query = nn.Linear(n_embd, head_size, bias=False)
         self.value = nn.Linear(n_embd, head_size, bias=False)
-        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
+        self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
 
         self.dropout = nn.Dropout(dropout)
 
@@ -26,17 +28,17 @@ class Head(nn.Module):
         # Every single node is emiting a query and a key vector.
         # The Query vector is what I'm looking for.
         # The Key vector is what do I contain.
-        k = self.key(x)   # (B,T,C)
+        k = self.key(x)  # (B,T,C)
         q = self.query(x)  # (B,T,C)
         # compute attention scores ("affinities")
         # The dot product between the key and the query. My query time the dot product of all the other tokens.
         # If the key and query are aligned, they will interact for a higher amount, and I'll learn about that
-        # specific token. 
+        # specific token.
         # We need to transpose the key but k has three dimensions. We only want to transpose the two last
         # dimensions.
         wei = q @ k.transpose(-2, -1) * C**-0.5  # (B, T, C) @ (B, C, T) -> (B, T, T)
         # We apply the upper triangular mask. Remove communications with future nodes.
-        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))  # (B, T, T)
+        wei = wei.masked_fill(self.tril[:T, :T] == 0, float("-inf"))  # (B, T, T)
         # We exponentiate and normalize. Each line has it sums of values . Remove communications with future nodes.
         wei = F.softmax(wei, dim=-1)  # (B, T, T)
         wei = self.dropout(wei)
@@ -48,7 +50,7 @@ class Head(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    """ multiple heads of self-attention in parallel """
+    """multiple heads of self-attention in parallel"""
 
     def __init__(self, num_heads: int, head_size: int, n_embd: int, block_size: int, dropout: float):
         super().__init__()
@@ -63,7 +65,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class FeedFoward(nn.Module):
-    """ a simple linear layer followed by a non-linearity """
+    """a simple linear layer followed by a non-linearity"""
 
     def __init__(self, n_embd: int, dropout: float):
         super().__init__()
@@ -80,7 +82,7 @@ class FeedFoward(nn.Module):
 
 
 class Block(nn.Module):
-    """ Transformer block: communication followed by computation """
+    """Transformer block: communication followed by computation"""
 
     def __init__(self, n_embd: int, n_head: int, block_size: int, dropout: float):
         # n_embd: embedding dimension, n_head: the number of heads we'd like
@@ -97,6 +99,7 @@ class Block(nn.Module):
         x = x + self.sa(self.ln1(x))
         x = x + self.ffwd(self.ln2(x))
         return x
+
 
 # super simple bigram model
 
@@ -128,11 +131,11 @@ class Transformer8(nn.Module):
         if targets is None:
             loss = None
         else:
-            #JEB: Interesting. This model computes the loss
-            #in the forward method.
+            # JEB: Interesting. This model computes the loss
+            # in the forward method.
             B, T, C = logits.shape
-            logits = logits.view(B*T, C)
-            targets = targets.view(B*T)
+            logits = logits.view(B * T, C)
+            targets = targets.view(B * T)
             loss = F.cross_entropy(logits, targets)
 
         return logits, loss
@@ -141,7 +144,7 @@ class Transformer8(nn.Module):
         # idx is (B, T) array of indices in the current context
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
-            idx_cond = idx[:, -self.block_size:]
+            idx_cond = idx[:, -self.block_size :]
             # get the predictions. (We invoke forward here with a target)
             logits, loss = self(idx_cond)
             # focus only on the last time step
@@ -155,11 +158,12 @@ class Transformer8(nn.Module):
         return idx
 
 
-def build_transformer8(tgt_vocab_size: int, d_model: int = 64, N: int = 4, h: int = 4, block_size: int = 32, dropout: float = 0.0, d_ff: int = 256) -> Transformer8:
+def build_transformer8(
+    tgt_vocab_size: int, d_model: int = 64, N: int = 4, h: int = 4, block_size: int = 32, dropout: float = 0.0, d_ff: int = 256
+) -> Transformer8:
 
     # Create the transformer
-    transformer = Transformer8(vocab_size=tgt_vocab_size, n_embd=d_model, n_head=h,
-                               n_layer=N, block_size=block_size, dropout=dropout)
+    transformer = Transformer8(vocab_size=tgt_vocab_size, n_embd=d_model, n_head=h, n_layer=N, block_size=block_size, dropout=dropout)
 
     # When computing the loss, we are ignoring cases when the label is the padding token
     # for params in transformer.parameters():

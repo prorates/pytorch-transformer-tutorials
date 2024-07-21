@@ -22,8 +22,7 @@ class Norm(nn.Module):
         self.eps = eps
 
     def forward(self, x):
-        norm = self.alpha * (x - x.mean(dim=-1, keepdim=True)) \
-            / (x.std(dim=-1, keepdim=True) + self.eps) + self.bias
+        norm = self.alpha * (x - x.mean(dim=-1, keepdim=True)) / (x.std(dim=-1, keepdim=True) + self.eps) + self.bias
         return norm
 
 
@@ -63,12 +62,10 @@ class PositionalEncoder(nn.Module):
         pe = torch.zeros(max_seq_len, d_model)
         for pos in range(max_seq_len):
             for i in range(0, d_model, 2):
-                pe[pos, i] = \
-                    math.sin(pos / (10000 ** ((2 * i) / d_model)))
-                pe[pos, i + 1] = \
-                    math.cos(pos / (10000 ** ((2 * (i + 1)) / d_model)))
+                pe[pos, i] = math.sin(pos / (10000 ** ((2 * i) / d_model)))
+                pe[pos, i + 1] = math.cos(pos / (10000 ** ((2 * (i + 1)) / d_model)))
         pe = pe.unsqueeze(0)
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
         # make embeddings relatively larger
@@ -130,8 +127,7 @@ class MultiHeadAttention(nn.Module):
         # calculate attention using function we will define next
         scores = MultiHeadAttention.attention(q, k, v, self.d_k, mask, self.dropout)
         # concatenate heads and put through final linear layer
-        concat = scores.transpose(1, 2).contiguous()\
-            .view(bs, -1, self.d_model)
+        concat = scores.transpose(1, 2).contiguous().view(bs, -1, self.d_model)
         output = self.out(concat)
 
         return output
@@ -174,6 +170,7 @@ class Encoder(nn.Module):
         for i in range(self.N):
             x = self.layers[i](x, mask)
         return self.norm(x)
+
 
 # build a decoder layer with two multi-head attention layers and
 # one feed-forward layer
@@ -227,8 +224,7 @@ class Decoder(nn.Module):
 
 class Transformer3(nn.Module):
 
-    def __init__(self, src_vocab_size: int, trg_vocab_size: int, src_seq_len: int,
-                 trg_seq_len: int, d_model: int, N: int, heads: int, dropout: float):
+    def __init__(self, src_vocab_size: int, trg_vocab_size: int, src_seq_len: int, trg_seq_len: int, d_model: int, N: int, heads: int, dropout: float):
         super().__init__()
         self.encoder = Encoder(src_vocab_size, src_seq_len, d_model, N, heads, dropout)
         self.decoder = Decoder(trg_vocab_size, trg_seq_len, d_model, N, heads, dropout)
@@ -241,8 +237,9 @@ class Transformer3(nn.Module):
         return output
 
 
-def build_transformer3(src_vocab_size: int, trg_vocab_size: int, src_seq_len: int, trg_seq_len: int,
-                       d_model: int = 512, n_layers: int = 6, heads: int = 8, dropout: float = 0.1):
+def build_transformer3(
+    src_vocab_size: int, trg_vocab_size: int, src_seq_len: int, trg_seq_len: int, d_model: int = 512, n_layers: int = 6, heads: int = 8, dropout: float = 0.1
+):
 
     assert d_model % heads == 0
     assert dropout < 1

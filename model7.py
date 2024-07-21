@@ -18,23 +18,22 @@ class PositionalEncoding(nn.Module):
         pe = torch.zeros(max_len, 1, d_model)
         pe[:, 0, 0::2] = torch.sin(position * div_term)
         pe[:, 0, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x: Tensor) -> Tensor:
         """
         Arguments:
             x: Tensor, shape ``[seq_len, batch_size, embedding_dim]``
         """
-        x = x + self.pe[:x.size(0)]
+        x = x + self.pe[: x.size(0)]
         return self.dropout(x)
 
 
 class Transformer7(nn.Module):
 
-    def __init__(self, ntoken: int, d_model: int, nhead: int, d_hid: int,
-                 nlayers: int, dropout: float = 0.5):
+    def __init__(self, ntoken: int, d_model: int, nhead: int, d_hid: int, nlayers: int, dropout: float = 0.5):
         super().__init__()
-        self.model_type = 'Transformer'
+        self.model_type = "Transformer"
         self.pos_encoder = PositionalEncoding(d_model, dropout)
         encoder_layers = TransformerEncoderLayer(d_model, nhead, d_hid, dropout)
         self.transformer_encoder = TransformerEncoder(encoder_layers, nlayers)
@@ -74,8 +73,7 @@ class Transformer7(nn.Module):
 def build_transformer7(tgt_vocab_size: int, d_model: int = 200, N: int = 2, h: int = 2, dropout: float = 0.2, d_ff: int = 200) -> Transformer7:
 
     # Create the transformer
-    transformer = Transformer7(ntoken=tgt_vocab_size, d_model=d_model, nhead=h,
-                               d_hid=d_ff, nlayers=N, dropout=dropout)
+    transformer = Transformer7(ntoken=tgt_vocab_size, d_model=d_model, nhead=h, d_hid=d_ff, nlayers=N, dropout=dropout)
 
     # When computing the loss, we are ignoring cases when the label is the padding token
     # for params in transformer.parameters():

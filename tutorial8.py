@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 import torch
-from torch.utils.data import DataLoader 
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from config import get_config, get_device, get_model_folder
@@ -15,8 +15,9 @@ from utils import reload_model, save_model, load_trained_model
 
 
 def build_model8(config: dict, vocab_tgt_len: int) -> Transformer8:
-    model = build_transformer8(vocab_tgt_len,
-                               d_model=config['d_model'], N=config['N'], h=config['h'], block_size=config['block_size'], dropout=config['dropout'], d_ff=config['d_ff'])
+    model = build_transformer8(
+        vocab_tgt_len, d_model=config["d_model"], N=config["N"], h=config["h"], block_size=config["block_size"], dropout=config["dropout"], d_ff=config["d_ff"]
+    )
     return model
 
 
@@ -40,21 +41,20 @@ def train_model8(config: dict):
     transformer = build_model8(config, tokenizer_tgt.get_vocab_size()).to(device)
 
     # print the number of parameters in the model
-    print(sum(p.numel() for p in transformer.parameters())/1e6, 'M parameters')
+    print(sum(p.numel() for p in transformer.parameters()) / 1e6, "M parameters")
 
     # create a PyTorch optimizer
-    optimizer = torch.optim.AdamW(transformer.parameters(), lr=config['lr'])
+    optimizer = torch.optim.AdamW(transformer.parameters(), lr=config["lr"])
 
-    transformer, initial_epoch, optimizer, global_step = reload_model(
-        config, transformer, optimizer, initial_epoch, global_step)
+    transformer, initial_epoch, optimizer, global_step = reload_model(config, transformer, optimizer, initial_epoch, global_step)
 
-    for epoch in range(initial_epoch, config['num_epochs']):
-        if (device == 'cuda'):
+    for epoch in range(initial_epoch, config["num_epochs"]):
+        if device == "cuda":
             torch.cuda.empty_cache()
 
         transformer.train()  # moved inside for run_validation at each step
 
-        batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
+        batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch {epoch:02d}")
         # for iter, batch in enumerate(batch_iterator):
         #     if (iter == max_iters):
         #         break
@@ -78,7 +78,6 @@ def train_model8(config: dict):
         # Save the model at the end of every epoch
         save_model(config, transformer, optimizer, epoch, global_step)
 
-
     # generate from the model
     context = torch.zeros((1, 1), dtype=torch.long, device=device)
     print(tokenizer_tgt.decode(transformer.generate(context, max_new_tokens=2000)[0].tolist()))
@@ -87,10 +86,10 @@ def train_model8(config: dict):
 @torch.no_grad()
 def evaluate_model8(transformer: Transformer8, val_dataloader: DataLoader, eval_iters: int, device, train_ds: Dataset8, val_ds: Dataset8):
 
-    out = {'train':0, 'val': 0}
+    out = {"train": 0, "val": 0}
     transformer.eval()
 
-    tmp = {'train':train_ds, 'val': val_ds}
+    tmp = {"train": train_ds, "val": val_ds}
     for key, value in tmp.items():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
@@ -111,6 +110,7 @@ def evaluate_model8(transformer: Transformer8, val_dataloader: DataLoader, eval_
     transformer.train()
     return out
 
+
 def translate8(config: dict, sentence: str):
     device = get_device()
 
@@ -128,11 +128,12 @@ def translate8(config: dict, sentence: str):
     context = torch.zeros((1, 1), dtype=torch.long, device=device)
     print(tokenizer.decode(model.generate(context, max_new_tokens=2000)[0].tolist()))
 
+
 def debug_code_model8(config: dict, device):
-    config['model'] = "model7"
-    config['datasource'] = "translate"
-    config['lang_src'] = "en"
-    config['lang_tgt'] = "fr"
+    config["model"] = "model7"
+    config["datasource"] = "translate"
+    config["lang_src"] = "en"
+    config["lang_tgt"] = "fr"
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
@@ -144,7 +145,7 @@ def debug_code_model8(config: dict, device):
     model.train()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # warnings.filterwarnings('ignore')
     config = get_config()
     device = get_device()

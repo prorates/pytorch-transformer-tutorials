@@ -11,15 +11,14 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
 
-from config import (get_console_width, get_device, get_model_folder, get_config)
+from config import get_console_width, get_device, get_model_folder, get_config
 from dataset7 import get_ds7
 from model7 import Transformer7, build_transformer7
 from utils import reload_model, save_model
 
 
 def build_model7(config: dict, vocab_tgt_len: int) -> Transformer7:
-    model = build_transformer7(vocab_tgt_len,
-                               d_model=config['d_model'], N=config['N'], h=config['h'], dropout=config['dropout'], d_ff=config['d_ff'])
+    model = build_transformer7(vocab_tgt_len, d_model=config["d_model"], N=config["N"], h=config["h"], dropout=config["dropout"], d_ff=config["d_ff"])
     return model
 
 
@@ -33,20 +32,19 @@ def train_model7(config: dict):
     transformer = build_model7(config, tokenizer_tgt.get_vocab_size()).to(device)
 
     # Tensorboard
-    writer = SummaryWriter(get_model_folder(config) + "/" + config['experiment_name'])
+    writer = SummaryWriter(get_model_folder(config) + "/" + config["experiment_name"])
 
     lr = 5.0  # learning rate
     optimizer = torch.optim.SGD(transformer.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
 
-    best_val_loss = float('inf')
+    best_val_loss = float("inf")
     total_loss = 0
     initial_epoch = 0
     global_step = 0
     log_interval = 200
 
-    transformer, initial_epoch, optimizer, global_step = reload_model(
-        config, transformer, optimizer, initial_epoch, global_step)
+    transformer, initial_epoch, optimizer, global_step = reload_model(config, transformer, optimizer, initial_epoch, global_step)
     loss_fn = nn.CrossEntropyLoss()
 
     console_width = get_console_width()
@@ -54,13 +52,13 @@ def train_model7(config: dict):
     start_time = time.time()
     num_batches = len(train_dataloader)
 
-    for epoch in range(initial_epoch, config['num_epochs']):
+    for epoch in range(initial_epoch, config["num_epochs"]):
         epoch_start_time = time.time()
-        if (device == 'cuda'):
+        if device == "cuda":
             torch.cuda.empty_cache()
 
         transformer.train()  # moved inside for run_validation at each step
-        batch_iterator = tqdm(train_dataloader, desc=f'Processing epoch {epoch:02d}')
+        batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch {epoch:02d}")
         for batch_num, batch in enumerate(batch_iterator):
             data, targets = batch
             data = data.squeeze(0).to(device)
@@ -74,7 +72,7 @@ def train_model7(config: dict):
             batch_iterator.set_postfix({"Loss": f"{loss.item():6.3f}"})
 
             # Log of loss
-            writer.add_scalar('train loss', loss.item(), global_step)
+            writer.add_scalar("train loss", loss.item(), global_step)
             writer.flush()
 
             optimizer.zero_grad()
@@ -89,7 +87,10 @@ def train_model7(config: dict):
                 cur_loss = total_loss / log_interval
                 ppl = math.exp(cur_loss)
                 batch_iterator.write(
-                    f'| epoch {epoch:3d} | {batch_num:5d}/{num_batches:5d} batches | ' f'lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | ' f'loss {cur_loss:5.2f} | ppl {ppl:8.2f}')
+                    f"| epoch {epoch:3d} | {batch_num:5d}/{num_batches:5d} batches | "
+                    f"lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | "
+                    f"loss {cur_loss:5.2f} | ppl {ppl:8.2f}"
+                )
                 total_loss = 0
                 start_time = time.time()
 
@@ -101,10 +102,9 @@ def train_model7(config: dict):
 
         val_ppl = math.exp(val_loss)
         elapsed = time.time() - epoch_start_time
-        batch_iterator.write('-' * console_width)
-        batch_iterator.write(
-            f'| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | ' f'valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}')
-        batch_iterator.write('-' * console_width)
+        batch_iterator.write("-" * console_width)
+        batch_iterator.write(f"| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | " f"valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}")
+        batch_iterator.write("-" * console_width)
 
         best_model_yet = False
         if val_loss < best_val_loss:
@@ -125,7 +125,7 @@ def train_model7(config: dict):
 def evaluate_model7(transformer: Transformer7, validation_ds: DataLoader, ntokens: int, device):
 
     transformer.eval()  # turn on evaluation mode
-    total_loss = 0.
+    total_loss = 0.0
 
     criterion = nn.CrossEntropyLoss()
 
@@ -150,6 +150,7 @@ def evaluate_model7(transformer: Transformer7, validation_ds: DataLoader, ntoken
 
     return total_loss / (len(validation_ds) - 1)
 
+
 def translate7(config: dict, sentence: str):
     device = get_device()
 
@@ -159,11 +160,12 @@ def translate7(config: dict, sentence: str):
 
     raise RuntimeError("Not implemented yet")
 
+
 def debug_code_model7(config: dict, device):
-    config['model'] = "model7"
-    config['datasource'] = "translate"
-    config['lang_src'] = "en"
-    config['lang_tgt'] = "fr"
+    config["model"] = "model7"
+    config["datasource"] = "translate"
+    config["lang_src"] = "en"
+    config["lang_tgt"] = "fr"
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
@@ -174,7 +176,8 @@ def debug_code_model7(config: dict, device):
     print(model)
     model.train()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # warnings.filterwarnings('ignore')
     config = get_config()
     device = get_device()

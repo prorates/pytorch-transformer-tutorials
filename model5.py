@@ -10,23 +10,20 @@ import torch.nn.init
 
 
 def _generate_square_subsequent_mask(
-        sz: int,
-        device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
-        dtype: torch.dtype = torch.get_default_dtype(),
+    sz: int,
+    device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+    dtype: torch.dtype = torch.get_default_dtype(),
 ) -> Tensor:
     r"""Generate a square causal mask for the sequence. The masked positions are filled with float('-inf').
-        Unmasked positions are filled with float(0.0).
+    Unmasked positions are filled with float(0.0).
     """
     return torch.triu(
-        torch.full((sz, sz), float('-inf'), dtype=dtype, device=device),
+        torch.full((sz, sz), float("-inf"), dtype=dtype, device=device),
         diagonal=1,
     )
 
 
-def _get_seq_len(
-        src: Tensor,
-        batch_first: bool
-) -> Optional[int]:
+def _get_seq_len(src: Tensor, batch_first: bool) -> Optional[int]:
 
     if src.is_nested:
         return None
@@ -116,14 +113,14 @@ class LayerNorm(nn.Module):
         :scale: 50 %
 
     """
-    __constants__ = ['normalized_shape', 'eps', 'elementwise_affine']
+
+    __constants__ = ["normalized_shape", "eps", "elementwise_affine"]
     normalized_shape: Tuple[int, ...]
     eps: float
     elementwise_affine: bool
 
-    def __init__(self, normalized_shape, eps: float = 1e-5, elementwise_affine: bool = True,
-                 bias: bool = True, device=None, dtype=None) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+    def __init__(self, normalized_shape, eps: float = 1e-5, elementwise_affine: bool = True, bias: bool = True, device=None, dtype=None) -> None:
+        factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         if isinstance(normalized_shape, numbers.Integral):
             # mypy error: incompatible types in assignment
@@ -136,10 +133,10 @@ class LayerNorm(nn.Module):
             if bias:
                 self.bias = nn.Parameter(torch.empty(self.normalized_shape, **factory_kwargs))
             else:
-                self.register_parameter('bias', None)
+                self.register_parameter("bias", None)
         else:
-            self.register_parameter('weight', None)
-            self.register_parameter('bias', None)
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
 
         self.reset_parameters()
 
@@ -150,12 +147,10 @@ class LayerNorm(nn.Module):
                 torch.nn.init.zeros_(self.bias)
 
     def forward(self, input: Tensor) -> Tensor:
-        return F.layer_norm(
-            input, self.normalized_shape, self.weight, self.bias, self.eps)
+        return F.layer_norm(input, self.normalized_shape, self.weight, self.bias, self.eps)
 
     def extra_repr(self) -> str:
-        return '{normalized_shape}, eps={eps}, ' \
-            'elementwise_affine={elementwise_affine}'.format(**self.__dict__)
+        return "{normalized_shape}, eps={eps}, " "elementwise_affine={elementwise_affine}".format(**self.__dict__)
 
 
 class MultiheadAttention(nn.Module):
@@ -221,18 +216,27 @@ class MultiheadAttention(nn.Module):
 
     """
 
-    __constants__ = ['batch_first']
+    __constants__ = ["batch_first"]
     bias_k: Optional[torch.Tensor]
     bias_v: Optional[torch.Tensor]
 
-    def __init__(self, embed_dim, num_heads, dropout=0., bias=True, add_bias_kv=False, add_zero_attn=False,
-                 kdim=None, vdim=None, batch_first=False, device=None, dtype=None) -> None:
+    def __init__(
+        self,
+        embed_dim,
+        num_heads,
+        dropout=0.0,
+        bias=True,
+        add_bias_kv=False,
+        add_zero_attn=False,
+        kdim=None,
+        vdim=None,
+        batch_first=False,
+        device=None,
+        dtype=None,
+    ) -> None:
         if embed_dim <= 0 or num_heads <= 0:
-            raise ValueError(
-                f"embed_dim and num_heads must be greater than 0,"
-                f" got embed_dim={embed_dim} and num_heads={num_heads} instead"
-            )
-        factory_kwargs = {'device': device, 'dtype': dtype}
+            raise ValueError(f"embed_dim and num_heads must be greater than 0," f" got embed_dim={embed_dim} and num_heads={num_heads} instead")
+        factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
         self.embed_dim = embed_dim
         self.kdim = kdim if kdim is not None else embed_dim
@@ -249,17 +253,17 @@ class MultiheadAttention(nn.Module):
             self.q_proj_weight = nn.Parameter(torch.empty((embed_dim, embed_dim), **factory_kwargs))
             self.k_proj_weight = nn.Parameter(torch.empty((embed_dim, self.kdim), **factory_kwargs))
             self.v_proj_weight = nn.Parameter(torch.empty((embed_dim, self.vdim), **factory_kwargs))
-            self.register_parameter('in_proj_weight', None)
+            self.register_parameter("in_proj_weight", None)
         else:
             self.in_proj_weight = nn.Parameter(torch.empty((3 * embed_dim, embed_dim), **factory_kwargs))
-            self.register_parameter('q_proj_weight', None)
-            self.register_parameter('k_proj_weight', None)
-            self.register_parameter('v_proj_weight', None)
+            self.register_parameter("q_proj_weight", None)
+            self.register_parameter("k_proj_weight", None)
+            self.register_parameter("v_proj_weight", None)
 
         if bias:
             self.in_proj_bias = nn.Parameter(torch.empty(3 * embed_dim, **factory_kwargs))
         else:
-            self.register_parameter('in_proj_bias', None)
+            self.register_parameter("in_proj_bias", None)
         # self.out_proj = nn.linear.NonDynamicallyQuantizableLinear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
         self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias, **factory_kwargs)
 
@@ -291,92 +295,88 @@ class MultiheadAttention(nn.Module):
 
     def __setstate__(self, state):
         # Support loading old MultiheadAttention checkpoints generated by v1.1.0
-        if '_qkv_same_embed_dim' not in state:
-            state['_qkv_same_embed_dim'] = True
+        if "_qkv_same_embed_dim" not in state:
+            state["_qkv_same_embed_dim"] = True
 
         super().__setstate__(state)
 
     def forward(
-            self,
-            query: Tensor,
-            key: Tensor,
-            value: Tensor,
-            key_padding_mask: Optional[Tensor] = None,
-            need_weights: bool = True,
-            attn_mask: Optional[Tensor] = None,
-            average_attn_weights: bool = True,
-            is_causal: bool = False) -> Tuple[Tensor, Optional[Tensor]]:
+        self,
+        query: Tensor,
+        key: Tensor,
+        value: Tensor,
+        key_padding_mask: Optional[Tensor] = None,
+        need_weights: bool = True,
+        attn_mask: Optional[Tensor] = None,
+        average_attn_weights: bool = True,
+        is_causal: bool = False,
+    ) -> Tuple[Tensor, Optional[Tensor]]:
         r"""
-    Args:
-        query: Query embeddings of shape :math:`(L, E_q)` for unbatched input, :math:`(L, N, E_q)` when ``batch_first=False``
-            or :math:`(N, L, E_q)` when ``batch_first=True``, where :math:`L` is the target sequence length,
-            :math:`N` is the batch size, and :math:`E_q` is the query embedding dimension ``embed_dim``.
-            Queries are compared against key-value pairs to produce the output.
-            See "Attention Is All You Need" for more details.
-        key: Key embeddings of shape :math:`(S, E_k)` for unbatched input, :math:`(S, N, E_k)` when ``batch_first=False``
-            or :math:`(N, S, E_k)` when ``batch_first=True``, where :math:`S` is the source sequence length,
-            :math:`N` is the batch size, and :math:`E_k` is the key embedding dimension ``kdim``.
-            See "Attention Is All You Need" for more details.
-        value: Value embeddings of shape :math:`(S, E_v)` for unbatched input, :math:`(S, N, E_v)` when
-            ``batch_first=False`` or :math:`(N, S, E_v)` when ``batch_first=True``, where :math:`S` is the source
-            sequence length, :math:`N` is the batch size, and :math:`E_v` is the value embedding dimension ``vdim``.
-            See "Attention Is All You Need" for more details.
-        key_padding_mask: If specified, a mask of shape :math:`(N, S)` indicating which elements within ``key``
-            to ignore for the purpose of attention (i.e. treat as "padding"). For unbatched `query`, shape should be :math:`(S)`.
-            Binary and float masks are supported.
-            For a binary mask, a ``True`` value indicates that the corresponding ``key`` value will be ignored for
-            the purpose of attention. For a float mask, it will be directly added to the corresponding ``key`` value.
-        need_weights: If specified, returns ``attn_output_weights`` in addition to ``attn_outputs``.
-            Set ``need_weights=False`` to use the optimized ``scaled_dot_product_attention``
-            and achieve the best performance for MHA.
-            Default: ``True``.
-        attn_mask: If specified, a 2D or 3D mask preventing attention to certain positions. Must be of shape
-            :math:`(L, S)` or :math:`(N\cdot\text{num\_heads}, L, S)`, where :math:`N` is the batch size,
-            :math:`L` is the target sequence length, and :math:`S` is the source sequence length. A 2D mask will be
-            broadcasted across the batch while a 3D mask allows for a different mask for each entry in the batch.
-            Binary and float masks are supported. For a binary mask, a ``True`` value indicates that the
-            corresponding position is not allowed to attend. For a float mask, the mask values will be added to
-            the attention weight.
-            If both attn_mask and key_padding_mask are supplied, their types should match.
-        average_attn_weights: If true, indicates that the returned ``attn_weights`` should be averaged across
-            heads. Otherwise, ``attn_weights`` are provided separately per head. Note that this flag only has an
-            effect when ``need_weights=True``. Default: ``True`` (i.e. average weights across heads)
-        is_causal: If specified, applies a causal mask as attention mask.
-            Default: ``False``.
-            Warning:
-            ``is_causal`` provides a hint that ``attn_mask`` is the
-            causal mask. Providing incorrect hints can result in
-            incorrect execution, including forward and backward
-            compatibility.
+        Args:
+            query: Query embeddings of shape :math:`(L, E_q)` for unbatched input, :math:`(L, N, E_q)` when ``batch_first=False``
+                or :math:`(N, L, E_q)` when ``batch_first=True``, where :math:`L` is the target sequence length,
+                :math:`N` is the batch size, and :math:`E_q` is the query embedding dimension ``embed_dim``.
+                Queries are compared against key-value pairs to produce the output.
+                See "Attention Is All You Need" for more details.
+            key: Key embeddings of shape :math:`(S, E_k)` for unbatched input, :math:`(S, N, E_k)` when ``batch_first=False``
+                or :math:`(N, S, E_k)` when ``batch_first=True``, where :math:`S` is the source sequence length,
+                :math:`N` is the batch size, and :math:`E_k` is the key embedding dimension ``kdim``.
+                See "Attention Is All You Need" for more details.
+            value: Value embeddings of shape :math:`(S, E_v)` for unbatched input, :math:`(S, N, E_v)` when
+                ``batch_first=False`` or :math:`(N, S, E_v)` when ``batch_first=True``, where :math:`S` is the source
+                sequence length, :math:`N` is the batch size, and :math:`E_v` is the value embedding dimension ``vdim``.
+                See "Attention Is All You Need" for more details.
+            key_padding_mask: If specified, a mask of shape :math:`(N, S)` indicating which elements within ``key``
+                to ignore for the purpose of attention (i.e. treat as "padding"). For unbatched `query`, shape should be :math:`(S)`.
+                Binary and float masks are supported.
+                For a binary mask, a ``True`` value indicates that the corresponding ``key`` value will be ignored for
+                the purpose of attention. For a float mask, it will be directly added to the corresponding ``key`` value.
+            need_weights: If specified, returns ``attn_output_weights`` in addition to ``attn_outputs``.
+                Set ``need_weights=False`` to use the optimized ``scaled_dot_product_attention``
+                and achieve the best performance for MHA.
+                Default: ``True``.
+            attn_mask: If specified, a 2D or 3D mask preventing attention to certain positions. Must be of shape
+                :math:`(L, S)` or :math:`(N\cdot\text{num\_heads}, L, S)`, where :math:`N` is the batch size,
+                :math:`L` is the target sequence length, and :math:`S` is the source sequence length. A 2D mask will be
+                broadcasted across the batch while a 3D mask allows for a different mask for each entry in the batch.
+                Binary and float masks are supported. For a binary mask, a ``True`` value indicates that the
+                corresponding position is not allowed to attend. For a float mask, the mask values will be added to
+                the attention weight.
+                If both attn_mask and key_padding_mask are supplied, their types should match.
+            average_attn_weights: If true, indicates that the returned ``attn_weights`` should be averaged across
+                heads. Otherwise, ``attn_weights`` are provided separately per head. Note that this flag only has an
+                effect when ``need_weights=True``. Default: ``True`` (i.e. average weights across heads)
+            is_causal: If specified, applies a causal mask as attention mask.
+                Default: ``False``.
+                Warning:
+                ``is_causal`` provides a hint that ``attn_mask`` is the
+                causal mask. Providing incorrect hints can result in
+                incorrect execution, including forward and backward
+                compatibility.
 
-    Outputs:
-        - **attn_output** - Attention outputs of shape :math:`(L, E)` when input is unbatched,
-          :math:`(L, N, E)` when ``batch_first=False`` or :math:`(N, L, E)` when ``batch_first=True``,
-          where :math:`L` is the target sequence length, :math:`N` is the batch size, and :math:`E` is the
-          embedding dimension ``embed_dim``.
-        - **attn_output_weights** - Only returned when ``need_weights=True``. If ``average_attn_weights=True``,
-          returns attention weights averaged across heads of shape :math:`(L, S)` when input is unbatched or
-          :math:`(N, L, S)`, where :math:`N` is the batch size, :math:`L` is the target sequence length, and
-          :math:`S` is the source sequence length. If ``average_attn_weights=False``, returns attention weights per
-          head of shape :math:`(\text{num\_heads}, L, S)` when input is unbatched or :math:`(N, \text{num\_heads}, L, S)`.
+        Outputs:
+            - **attn_output** - Attention outputs of shape :math:`(L, E)` when input is unbatched,
+              :math:`(L, N, E)` when ``batch_first=False`` or :math:`(N, L, E)` when ``batch_first=True``,
+              where :math:`L` is the target sequence length, :math:`N` is the batch size, and :math:`E` is the
+              embedding dimension ``embed_dim``.
+            - **attn_output_weights** - Only returned when ``need_weights=True``. If ``average_attn_weights=True``,
+              returns attention weights averaged across heads of shape :math:`(L, S)` when input is unbatched or
+              :math:`(N, L, S)`, where :math:`N` is the batch size, :math:`L` is the target sequence length, and
+              :math:`S` is the source sequence length. If ``average_attn_weights=False``, returns attention weights per
+              head of shape :math:`(\text{num\_heads}, L, S)` when input is unbatched or :math:`(N, \text{num\_heads}, L, S)`.
 
-        .. note::
-            `batch_first` argument is ignored for unbatched inputs.
+            .. note::
+                `batch_first` argument is ignored for unbatched inputs.
         """
 
-        why_not_fast_path = ''
-        if ((attn_mask is not None and torch.is_floating_point(attn_mask))
-           or (key_padding_mask is not None) and torch.is_floating_point(key_padding_mask)):
+        why_not_fast_path = ""
+        if (attn_mask is not None and torch.is_floating_point(attn_mask)) or (key_padding_mask is not None) and torch.is_floating_point(key_padding_mask):
             why_not_fast_path = "floating-point masks are not supported for fast path."
 
         is_batched = query.dim() == 3
 
         key_padding_mask = F._canonical_mask(
-            mask=key_padding_mask,
-            mask_name="key_padding_mask",
-            other_type=F._none_or_dtype(attn_mask),
-            other_name="attn_mask",
-            target_type=query.dtype
+            mask=key_padding_mask, mask_name="key_padding_mask", other_type=F._none_or_dtype(attn_mask), other_name="attn_mask", target_type=query.dtype
         )
 
         attn_mask = F._canonical_mask(
@@ -439,11 +439,11 @@ class MultiheadAttention(nn.Module):
             elif _is_make_fx_tracing():
                 why_not_fast_path = "we are running make_fx tracing"
             elif not all(_check_arg_device(x) for x in tensor_args):
-                why_not_fast_path = ("some Tensor argument's device is neither one of "
-                                     f"cpu, cuda or {torch.utils.backend_registration._privateuse1_backend_name}")
+                why_not_fast_path = (
+                    "some Tensor argument's device is neither one of " f"cpu, cuda or {torch.utils.backend_registration._privateuse1_backend_name}"
+                )
             elif torch.is_grad_enabled() and any(_arg_requires_grad(x) for x in tensor_args):
-                why_not_fast_path = ("grad is enabled and at least one of query or the "
-                                     "input/output projection weights or biases requires_grad")
+                why_not_fast_path = "grad is enabled and at least one of query or the " "input/output projection weights or biases requires_grad"
             if not why_not_fast_path:
                 merged_mask, mask_type = self.merge_masks(attn_mask, key_padding_mask, query)
 
@@ -461,11 +461,13 @@ class MultiheadAttention(nn.Module):
                         merged_mask,
                         need_weights,
                         average_attn_weights,
-                        mask_type)
+                        mask_type,
+                    )
 
         any_nested = query.is_nested or key.is_nested or value.is_nested
-        assert not any_nested, ("MultiheadAttention does not support NestedTensor outside of its fast path. " +
-                                f"The fast path was not hit because {why_not_fast_path}")
+        assert not any_nested, (
+            "MultiheadAttention does not support NestedTensor outside of its fast path. " + f"The fast path was not hit because {why_not_fast_path}"
+        )
 
         if self.batch_first and is_batched:
             # make sure that the transpose op does not affect the "is" property
@@ -480,37 +482,58 @@ class MultiheadAttention(nn.Module):
 
         if not self._qkv_same_embed_dim:
             attn_output, attn_output_weights = F.multi_head_attention_forward(
-                query, key, value, self.embed_dim, self.num_heads,
-                self.in_proj_weight, self.in_proj_bias,
-                self.bias_k, self.bias_v, self.add_zero_attn,
-                self.dropout, self.out_proj.weight, self.out_proj.bias,
+                query,
+                key,
+                value,
+                self.embed_dim,
+                self.num_heads,
+                self.in_proj_weight,
+                self.in_proj_bias,
+                self.bias_k,
+                self.bias_v,
+                self.add_zero_attn,
+                self.dropout,
+                self.out_proj.weight,
+                self.out_proj.bias,
                 training=self.training,
-                key_padding_mask=key_padding_mask, need_weights=need_weights,
+                key_padding_mask=key_padding_mask,
+                need_weights=need_weights,
                 attn_mask=attn_mask,
                 use_separate_proj_weight=True,
-                q_proj_weight=self.q_proj_weight, k_proj_weight=self.k_proj_weight,
+                q_proj_weight=self.q_proj_weight,
+                k_proj_weight=self.k_proj_weight,
                 v_proj_weight=self.v_proj_weight,
                 average_attn_weights=average_attn_weights,
-                is_causal=is_causal)
+                is_causal=is_causal,
+            )
         else:
             attn_output, attn_output_weights = F.multi_head_attention_forward(
-                query, key, value, self.embed_dim, self.num_heads,
-                self.in_proj_weight, self.in_proj_bias,
-                self.bias_k, self.bias_v, self.add_zero_attn,
-                self.dropout, self.out_proj.weight, self.out_proj.bias,
+                query,
+                key,
+                value,
+                self.embed_dim,
+                self.num_heads,
+                self.in_proj_weight,
+                self.in_proj_bias,
+                self.bias_k,
+                self.bias_v,
+                self.add_zero_attn,
+                self.dropout,
+                self.out_proj.weight,
+                self.out_proj.bias,
                 training=self.training,
                 key_padding_mask=key_padding_mask,
                 need_weights=need_weights,
                 attn_mask=attn_mask,
                 average_attn_weights=average_attn_weights,
-                is_causal=is_causal)
+                is_causal=is_causal,
+            )
         if self.batch_first and is_batched:
             return attn_output.transpose(1, 0), attn_output_weights
         else:
             return attn_output, attn_output_weights
 
-    def merge_masks(self, attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor],
-                    query: Tensor) -> Tuple[Optional[Tensor], Optional[int]]:
+    def merge_masks(self, attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], query: Tensor) -> Tuple[Optional[Tensor], Optional[int]]:
         r"""
         Determine mask type and combine masks if necessary. If only one mask is provided, that mask
         and the corresponding mask type will be returned. If both masks are provided, they will be both
@@ -544,8 +567,7 @@ class MultiheadAttention(nn.Module):
             merged_mask = attn_mask_expanded
 
             if key_padding_mask is not None:
-                key_padding_mask_expanded = key_padding_mask.view(
-                    batch_size, 1, 1, seq_len).expand(-1, self.num_heads, -1, -1)
+                key_padding_mask_expanded = key_padding_mask.view(batch_size, 1, 1, seq_len).expand(-1, self.num_heads, -1, -1)
                 merged_mask = attn_mask_expanded + key_padding_mask_expanded
 
         # no attn_mask and no key_padding_mask, returns None, None
@@ -588,30 +610,42 @@ class Transformer5(nn.Module):
     https://github.com/pytorch/examples/tree/master/word_language_model
     """
 
-    def __init__(self, d_model: int = 512, nhead: int = 8, num_encoder_layers: int = 6,
-                 num_decoder_layers: int = 6, dim_feedforward: int = 2048, dropout: float = 0.1,
-                 activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
-                 custom_encoder: Optional[Any] = None, custom_decoder: Optional[Any] = None,
-                 layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
-                 bias: bool = True, device=None, dtype=None) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+    def __init__(
+        self,
+        d_model: int = 512,
+        nhead: int = 8,
+        num_encoder_layers: int = 6,
+        num_decoder_layers: int = 6,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.1,
+        activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
+        custom_encoder: Optional[Any] = None,
+        custom_decoder: Optional[Any] = None,
+        layer_norm_eps: float = 1e-5,
+        batch_first: bool = False,
+        norm_first: bool = False,
+        bias: bool = True,
+        device=None,
+        dtype=None,
+    ) -> None:
+        factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
 
         if custom_encoder is not None:
             self.encoder = custom_encoder
         else:
-            encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout,
-                                                    activation, layer_norm_eps, batch_first, norm_first,
-                                                    bias, **factory_kwargs)
+            encoder_layer = TransformerEncoderLayer(
+                d_model, nhead, dim_feedforward, dropout, activation, layer_norm_eps, batch_first, norm_first, bias, **factory_kwargs
+            )
             encoder_norm = LayerNorm(d_model, eps=layer_norm_eps, bias=bias, **factory_kwargs)
             self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
         if custom_decoder is not None:
             self.decoder = custom_decoder
         else:
-            decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout,
-                                                    activation, layer_norm_eps, batch_first, norm_first,
-                                                    bias, **factory_kwargs)
+            decoder_layer = TransformerDecoderLayer(
+                d_model, nhead, dim_feedforward, dropout, activation, layer_norm_eps, batch_first, norm_first, bias, **factory_kwargs
+            )
             decoder_norm = LayerNorm(d_model, eps=layer_norm_eps, bias=bias, **factory_kwargs)
             self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
 
@@ -622,11 +656,20 @@ class Transformer5(nn.Module):
 
         self.batch_first = batch_first
 
-    def forward(self, src: Tensor, tgt: Tensor, src_mask: Optional[Tensor] = None, tgt_mask: Optional[Tensor] = None,
-                memory_mask: Optional[Tensor] = None, src_key_padding_mask: Optional[Tensor] = None,
-                tgt_key_padding_mask: Optional[Tensor] = None, memory_key_padding_mask: Optional[Tensor] = None,
-                src_is_causal: Optional[bool] = None, tgt_is_causal: Optional[bool] = None,
-                memory_is_causal: bool = False) -> Tensor:
+    def forward(
+        self,
+        src: Tensor,
+        tgt: Tensor,
+        src_mask: Optional[Tensor] = None,
+        tgt_mask: Optional[Tensor] = None,
+        memory_mask: Optional[Tensor] = None,
+        src_key_padding_mask: Optional[Tensor] = None,
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        memory_key_padding_mask: Optional[Tensor] = None,
+        src_is_causal: Optional[bool] = None,
+        tgt_is_causal: Optional[bool] = None,
+        memory_is_causal: bool = False,
+    ) -> Tensor:
         r"""Take in and process masked source/target sequences.
 
         Args:
@@ -705,22 +748,27 @@ class Transformer5(nn.Module):
         if src.size(-1) != self.d_model or tgt.size(-1) != self.d_model:
             raise RuntimeError("the feature number of src and tgt must be equal to d_model")
 
-        memory = self.encoder(src, mask=src_mask, src_key_padding_mask=src_key_padding_mask,
-                              is_causal=src_is_causal)
-        output = self.decoder(tgt, memory, tgt_mask=tgt_mask, memory_mask=memory_mask,
-                              tgt_key_padding_mask=tgt_key_padding_mask,
-                              memory_key_padding_mask=memory_key_padding_mask,
-                              tgt_is_causal=tgt_is_causal, memory_is_causal=memory_is_causal)
+        memory = self.encoder(src, mask=src_mask, src_key_padding_mask=src_key_padding_mask, is_causal=src_is_causal)
+        output = self.decoder(
+            tgt,
+            memory,
+            tgt_mask=tgt_mask,
+            memory_mask=memory_mask,
+            tgt_key_padding_mask=tgt_key_padding_mask,
+            memory_key_padding_mask=memory_key_padding_mask,
+            tgt_is_causal=tgt_is_causal,
+            memory_is_causal=memory_is_causal,
+        )
         return output
 
     @staticmethod
     def generate_square_subsequent_mask(
-            sz: int,
-            device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
-            dtype: torch.dtype = torch.get_default_dtype(),
+        sz: int,
+        device: torch.device = torch.device(torch._C._get_default_device()),  # torch.device('cpu'),
+        dtype: torch.dtype = torch.get_default_dtype(),
     ) -> Tensor:
         r"""Generate a square causal mask for the sequence. The masked positions are filled with float('-inf').
-            Unmasked positions are filled with float(0.0).
+        Unmasked positions are filled with float(0.0).
         """
         return _generate_square_subsequent_mask(sz, dtype=dtype, device=device)
 
@@ -750,7 +798,8 @@ class TransformerEncoder(nn.Module):
         >>> src = torch.rand(10, 32, 512)
         >>> out = transformer_encoder(src)
     """
-    __constants__ = ['norm']
+
+    __constants__ = ["norm"]
 
     def __init__(self, encoder_layer, num_layers, norm=None, enable_nested_tensor=True, mask_check=True):
         super().__init__()
@@ -764,14 +813,13 @@ class TransformerEncoder(nn.Module):
         self.mask_check = mask_check
 
         enc_layer = "encoder_layer"
-        why_not_sparsity_fast_path = ''
+        why_not_sparsity_fast_path = ""
         if not isinstance(encoder_layer, torch.nn.TransformerEncoderLayer):
             why_not_sparsity_fast_path = f"{enc_layer} was not TransformerEncoderLayer"
         elif encoder_layer.norm_first:
             why_not_sparsity_fast_path = f"{enc_layer}.norm_first was True"
         elif not encoder_layer.self_attn.batch_first:
-            why_not_sparsity_fast_path = (f"{enc_layer}.self_attn.batch_first was not True" +
-                                          "(use batch_first for better inference performance)")
+            why_not_sparsity_fast_path = f"{enc_layer}.self_attn.batch_first was not True" + "(use batch_first for better inference performance)"
         elif not encoder_layer.self_attn._qkv_same_embed_dim:
             why_not_sparsity_fast_path = f"{enc_layer}.self_attn._qkv_same_embed_dim was not True"
         elif not encoder_layer.activation_relu_or_gelu:
@@ -784,12 +832,7 @@ class TransformerEncoder(nn.Module):
         if enable_nested_tensor and why_not_sparsity_fast_path:
             self.use_nested_tensor = False
 
-    def forward(
-            self,
-            src: Tensor,
-            mask: Optional[Tensor] = None,
-            src_key_padding_mask: Optional[Tensor] = None,
-            is_causal: Optional[bool] = None) -> Tensor:
+    def forward(self, src: Tensor, mask: Optional[Tensor] = None, src_key_padding_mask: Optional[Tensor] = None, is_causal: Optional[bool] = None) -> Tensor:
         r"""Pass the input through the encoder layers in turn.
 
         Args:
@@ -808,11 +851,7 @@ class TransformerEncoder(nn.Module):
             see the docs in Transformer class.
         """
         src_key_padding_mask = F._canonical_mask(
-            mask=src_key_padding_mask,
-            mask_name="src_key_padding_mask",
-            other_type=F._none_or_dtype(mask),
-            other_name="mask",
-            target_type=src.dtype
+            mask=src_key_padding_mask, mask_name="src_key_padding_mask", other_type=F._none_or_dtype(mask), other_name="mask", target_type=src.dtype
         )
 
         mask = F._canonical_mask(
@@ -828,7 +867,7 @@ class TransformerEncoder(nn.Module):
         convert_to_nested = False
         first_layer = self.layers[0]
         src_key_padding_mask_for_layers = src_key_padding_mask
-        why_not_sparsity_fast_path = ''
+        why_not_sparsity_fast_path = ""
         str_first_layer = "self.layers[0]"
         batch_first = first_layer.self_attn.batch_first
         if not hasattr(self, "use_nested_tensor"):
@@ -841,8 +880,9 @@ class TransformerEncoder(nn.Module):
             why_not_sparsity_fast_path = f"input not batched; expected src.dim() of 3 but got {src.dim()}"
         elif src_key_padding_mask is None:
             why_not_sparsity_fast_path = "src_key_padding_mask was None"
-        elif (((not hasattr(self, "mask_check")) or self.mask_check)
-                and not torch._nested_tensor_from_mask_left_aligned(src, src_key_padding_mask.logical_not())):
+        elif ((not hasattr(self, "mask_check")) or self.mask_check) and not torch._nested_tensor_from_mask_left_aligned(
+            src, src_key_padding_mask.logical_not()
+        ):
             why_not_sparsity_fast_path = "mask_check enabled, and src and src_key_padding_mask was not left aligned"
         elif output.is_nested:
             why_not_sparsity_fast_path = "NestedTensor input is not supported"
@@ -873,8 +913,7 @@ class TransformerEncoder(nn.Module):
             elif src.device.type not in _supported_device_type:
                 why_not_sparsity_fast_path = f"src device is neither one of {_supported_device_type}"
             elif torch.is_grad_enabled() and any(x.requires_grad for x in tensor_args):
-                why_not_sparsity_fast_path = ("grad is enabled and at least one of query or the "
-                                              "input/output projection weights or biases requires_grad")
+                why_not_sparsity_fast_path = "grad is enabled and at least one of query or the " "input/output projection weights or biases requires_grad"
 
             if (not why_not_sparsity_fast_path) and (src_key_padding_mask is not None):
                 convert_to_nested = True
@@ -885,11 +924,10 @@ class TransformerEncoder(nn.Module):
         is_causal = _detect_is_causal_mask(mask, is_causal, seq_len)
 
         for mod in self.layers:
-            output = mod(output, src_mask=mask, is_causal=is_causal,
-                         src_key_padding_mask=src_key_padding_mask_for_layers)
+            output = mod(output, src_mask=mask, is_causal=is_causal, src_key_padding_mask=src_key_padding_mask_for_layers)
 
         if convert_to_nested:
-            output = output.to_padded_tensor(0., src.size())
+            output = output.to_padded_tensor(0.0, src.size())
 
         if self.norm is not None:
             output = self.norm(output)
@@ -912,7 +950,8 @@ class TransformerDecoder(nn.Module):
         >>> tgt = torch.rand(20, 32, 512)
         >>> out = transformer_decoder(tgt, memory)
     """
-    __constants__ = ['norm']
+
+    __constants__ = ["norm"]
 
     def __init__(self, decoder_layer, num_layers, norm=None):
         super().__init__()
@@ -920,10 +959,17 @@ class TransformerDecoder(nn.Module):
         self.num_layers = num_layers
         self.norm = norm
 
-    def forward(self, tgt: Tensor, memory: Tensor, tgt_mask: Optional[Tensor] = None,
-                memory_mask: Optional[Tensor] = None, tgt_key_padding_mask: Optional[Tensor] = None,
-                memory_key_padding_mask: Optional[Tensor] = None, tgt_is_causal: Optional[bool] = None,
-                memory_is_causal: bool = False) -> Tensor:
+    def forward(
+        self,
+        tgt: Tensor,
+        memory: Tensor,
+        tgt_mask: Optional[Tensor] = None,
+        memory_mask: Optional[Tensor] = None,
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        memory_key_padding_mask: Optional[Tensor] = None,
+        tgt_is_causal: Optional[bool] = None,
+        memory_is_causal: bool = False,
+    ) -> Tensor:
         r"""Pass the inputs (and mask) through the decoder layer in turn.
 
         Args:
@@ -958,12 +1004,16 @@ class TransformerDecoder(nn.Module):
         tgt_is_causal = _detect_is_causal_mask(tgt_mask, tgt_is_causal, seq_len)
 
         for mod in self.layers:
-            output = mod(output, memory, tgt_mask=tgt_mask,
-                         memory_mask=memory_mask,
-                         tgt_key_padding_mask=tgt_key_padding_mask,
-                         memory_key_padding_mask=memory_key_padding_mask,
-                         tgt_is_causal=tgt_is_causal,
-                         memory_is_causal=memory_is_causal)
+            output = mod(
+                output,
+                memory,
+                tgt_mask=tgt_mask,
+                memory_mask=memory_mask,
+                tgt_key_padding_mask=tgt_key_padding_mask,
+                memory_key_padding_mask=memory_key_padding_mask,
+                tgt_is_causal=tgt_is_causal,
+                memory_is_causal=memory_is_causal,
+            )
 
         if self.norm is not None:
             output = self.norm(output)
@@ -1044,17 +1094,26 @@ class TransformerEncoderLayer(nn.Module):
          https://arxiv.org/abs/2205.14135
 
     """
-    __constants__ = ['norm_first']
 
-    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1,
-                 activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
-                 layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
-                 bias: bool = True, device=None, dtype=None) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+    __constants__ = ["norm_first"]
+
+    def __init__(
+        self,
+        d_model: int,
+        nhead: int,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.1,
+        activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
+        layer_norm_eps: float = 1e-5,
+        batch_first: bool = False,
+        norm_first: bool = False,
+        bias: bool = True,
+        device=None,
+        dtype=None,
+    ) -> None:
+        factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
-        self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout,
-                                            bias=bias, batch_first=batch_first,
-                                            **factory_kwargs)
+        self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, bias=bias, batch_first=batch_first, **factory_kwargs)
         # Implementation of Feedforward model
         # Check FeedFowardBlock in Model1 (line 35)
         self.linear1 = nn.Linear(d_model, dim_feedforward, bias=bias, **factory_kwargs)
@@ -1083,15 +1142,10 @@ class TransformerEncoderLayer(nn.Module):
 
     def __setstate__(self, state):
         super().__setstate__(state)
-        if not hasattr(self, 'activation'):
+        if not hasattr(self, "activation"):
             self.activation = F.relu
 
-    def forward(
-            self,
-            src: Tensor,
-            src_mask: Optional[Tensor] = None,
-            src_key_padding_mask: Optional[Tensor] = None,
-            is_causal: bool = False) -> Tensor:
+    def forward(self, src: Tensor, src_mask: Optional[Tensor] = None, src_key_padding_mask: Optional[Tensor] = None, is_causal: bool = False) -> Tensor:
         r"""Pass the input through the encoder layer.
 
         Args:
@@ -1110,11 +1164,7 @@ class TransformerEncoderLayer(nn.Module):
             see the docs in Transformer class.
         """
         src_key_padding_mask = F._canonical_mask(
-            mask=src_key_padding_mask,
-            mask_name="src_key_padding_mask",
-            other_type=F._none_or_dtype(src_mask),
-            other_name="src_mask",
-            target_type=src.dtype
+            mask=src_key_padding_mask, mask_name="src_key_padding_mask", other_type=F._none_or_dtype(src_mask), other_name="src_mask", target_type=src.dtype
         )
 
         src_mask = F._canonical_mask(
@@ -1127,7 +1177,7 @@ class TransformerEncoderLayer(nn.Module):
         )
 
         # see Fig. 1 of https://arxiv.org/pdf/2002.04745v1.pdf
-        why_not_sparsity_fast_path = ''
+        why_not_sparsity_fast_path = ""
         if not src.dim() == 3:
             why_not_sparsity_fast_path = f"input not batched; expected src.dim() of 3 but got {src.dim()}"
         elif self.training:
@@ -1169,11 +1219,9 @@ class TransformerEncoderLayer(nn.Module):
             if torch.overrides.has_torch_function(tensor_args):
                 why_not_sparsity_fast_path = "some Tensor argument has_torch_function"
             elif not all((x.device.type in _supported_device_type) for x in tensor_args):
-                why_not_sparsity_fast_path = ("some Tensor argument's device is neither one of "
-                                              f"{_supported_device_type}")
+                why_not_sparsity_fast_path = "some Tensor argument's device is neither one of " f"{_supported_device_type}"
             elif torch.is_grad_enabled() and any(x.requires_grad for x in tensor_args):
-                why_not_sparsity_fast_path = ("grad is enabled and at least one of query or the "
-                                              "input/output projection weights or biases requires_grad")
+                why_not_sparsity_fast_path = "grad is enabled and at least one of query or the " "input/output projection weights or biases requires_grad"
 
             if not why_not_sparsity_fast_path:
                 merged_mask, mask_type = self.self_attn.merge_masks(src_mask, src_key_padding_mask, src)
@@ -1211,12 +1259,8 @@ class TransformerEncoderLayer(nn.Module):
         return x
 
     # self-attention block
-    def _sa_block(self, x: Tensor,
-                  attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], is_causal: bool = False) -> Tensor:
-        x = self.self_attn(x, x, x,
-                           attn_mask=attn_mask,
-                           key_padding_mask=key_padding_mask,
-                           need_weights=False, is_causal=is_causal)[0]
+    def _sa_block(self, x: Tensor, attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], is_causal: bool = False) -> Tensor:
+        x = self.self_attn(x, x, x, attn_mask=attn_mask, key_padding_mask=key_padding_mask, need_weights=False, is_causal=is_causal)[0]
         return self.dropout1(x)
 
     # feed forward block
@@ -1261,18 +1305,27 @@ class TransformerDecoderLayer(nn.Module):
         >>> tgt = torch.rand(32, 20, 512)
         >>> out = decoder_layer(tgt, memory)
     """
-    __constants__ = ['norm_first']
 
-    def __init__(self, d_model: int, nhead: int, dim_feedforward: int = 2048, dropout: float = 0.1,
-                 activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
-                 layer_norm_eps: float = 1e-5, batch_first: bool = False, norm_first: bool = False,
-                 bias: bool = True, device=None, dtype=None) -> None:
-        factory_kwargs = {'device': device, 'dtype': dtype}
+    __constants__ = ["norm_first"]
+
+    def __init__(
+        self,
+        d_model: int,
+        nhead: int,
+        dim_feedforward: int = 2048,
+        dropout: float = 0.1,
+        activation: Union[str, Callable[[Tensor], Tensor]] = F.relu,
+        layer_norm_eps: float = 1e-5,
+        batch_first: bool = False,
+        norm_first: bool = False,
+        bias: bool = True,
+        device=None,
+        dtype=None,
+    ) -> None:
+        factory_kwargs = {"device": device, "dtype": dtype}
         super().__init__()
-        self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first,
-                                            bias=bias, **factory_kwargs)
-        self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first,
-                                                 bias=bias, **factory_kwargs)
+        self.self_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first, bias=bias, **factory_kwargs)
+        self.multihead_attn = MultiheadAttention(d_model, nhead, dropout=dropout, batch_first=batch_first, bias=bias, **factory_kwargs)
         # Implementation of Feedforward model
         # Check Model1 FeedForwardBlock (line 38)
         self.linear1 = nn.Linear(d_model, dim_feedforward, bias=bias, **factory_kwargs)
@@ -1294,8 +1347,8 @@ class TransformerDecoderLayer(nn.Module):
             self.activation = activation
 
     def __setstate__(self, state):
-        if 'activation' not in state:
-            state['activation'] = F.relu
+        if "activation" not in state:
+            state["activation"] = F.relu
         super().__setstate__(state)
 
     def forward(
@@ -1352,23 +1405,13 @@ class TransformerDecoderLayer(nn.Module):
         return x
 
     # self-attention block
-    def _sa_block(self, x: Tensor,
-                  attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], is_causal: bool = False) -> Tensor:
-        x = self.self_attn(x, x, x,
-                           attn_mask=attn_mask,
-                           key_padding_mask=key_padding_mask,
-                           is_causal=is_causal,
-                           need_weights=False)[0]
+    def _sa_block(self, x: Tensor, attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], is_causal: bool = False) -> Tensor:
+        x = self.self_attn(x, x, x, attn_mask=attn_mask, key_padding_mask=key_padding_mask, is_causal=is_causal, need_weights=False)[0]
         return self.dropout1(x)
 
     # multihead attention block
-    def _mha_block(self, x: Tensor, mem: Tensor,
-                   attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], is_causal: bool = False) -> Tensor:
-        x = self.multihead_attn(x, mem, mem,
-                                attn_mask=attn_mask,
-                                key_padding_mask=key_padding_mask,
-                                is_causal=is_causal,
-                                need_weights=False)[0]
+    def _mha_block(self, x: Tensor, mem: Tensor, attn_mask: Optional[Tensor], key_padding_mask: Optional[Tensor], is_causal: bool = False) -> Tensor:
+        x = self.multihead_attn(x, mem, mem, attn_mask=attn_mask, key_padding_mask=key_padding_mask, is_causal=is_causal, need_weights=False)[0]
         return self.dropout2(x)
 
     # feed forward block
@@ -1394,9 +1437,9 @@ def _get_activation_fn(activation: str) -> Callable[[Tensor], Tensor]:
 
 
 def _detect_is_causal_mask(
-        mask: Optional[Tensor],
-        is_causal: Optional[bool] = None,
-        size: Optional[int] = None,
+    mask: Optional[Tensor],
+    is_causal: Optional[bool] = None,
+    size: Optional[int] = None,
 ) -> bool:
     """Return whether the given attention mask is causal.
 
@@ -1418,12 +1461,11 @@ def _detect_is_causal_mask(
        Otherwise, checks for any causal mask.
     """
     # Prevent type refinement
-    make_causal = (is_causal is True)
+    make_causal = is_causal is True
 
     if is_causal is None and mask is not None:
         sz = size if size is not None else mask.size(-2)
-        causal_comparison = _generate_square_subsequent_mask(
-            sz, device=mask.device, dtype=mask.dtype)
+        causal_comparison = _generate_square_subsequent_mask(sz, device=mask.device, dtype=mask.dtype)
 
         # Do not use `torch.equal` so we handle batched masks by
         # broadcasting the comparison.
@@ -1435,13 +1477,31 @@ def _detect_is_causal_mask(
     return make_causal
 
 
-def build_transformer5(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int,
-                       d_model: int = 512, N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048) -> Transformer5:
+def build_transformer5(
+    src_vocab_size: int,
+    tgt_vocab_size: int,
+    src_seq_len: int,
+    tgt_seq_len: int,
+    d_model: int = 512,
+    N: int = 6,
+    h: int = 8,
+    dropout: float = 0.1,
+    d_ff: int = 2048,
+) -> Transformer5:
 
     # Create the transformer
-    transformer = Transformer5(d_model=d_model, nhead=h, dim_feedforward=d_ff, dropout=dropout,
-                               activation=F.relu,
-                               layer_norm_eps=1e-5, batch_first=False, norm_first=False,
-                               bias=True, device=None, dtype=None)
+    transformer = Transformer5(
+        d_model=d_model,
+        nhead=h,
+        dim_feedforward=d_ff,
+        dropout=dropout,
+        activation=F.relu,
+        layer_norm_eps=1e-5,
+        batch_first=False,
+        norm_first=False,
+        bias=True,
+        device=None,
+        dtype=None,
+    )
 
     return transformer

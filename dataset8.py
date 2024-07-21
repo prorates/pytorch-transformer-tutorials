@@ -35,23 +35,23 @@ class Dataset8(Dataset):
     def get_batch(self) -> Tuple[Tensor, Tensor]:
         # generate a small batch of data of inputs x and targets y
         ix = torch.randint(len(self.processed_data) - self.block_size, (self.batch_size,))
-        x = torch.stack([self.processed_data[i:i+self.block_size] for i in ix])
-        y = torch.stack([self.processed_data[i+1:i+self.block_size+1] for i in ix])
+        x = torch.stack([self.processed_data[i : i + self.block_size] for i in ix])
+        y = torch.stack([self.processed_data[i + 1 : i + self.block_size + 1] for i in ix])
         return x, y
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
         # The iterator is supposed to stack them up to batch_size
-        x = self.processed_data[idx:idx+self.block_size]
-        y = self.processed_data[idx+1:idx+self.block_size+1]
+        x = self.processed_data[idx : idx + self.block_size]
+        y = self.processed_data[idx + 1 : idx + self.block_size + 1]
         return x, y
 
 
 def get_or_build_tokenizer8(config: dict, model_folder: str, ds: str, lang: str) -> Tokenizer:
-    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
+    tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         tokenizer = Tokenizer(BPE(char_level=True, unk_token=UNK))
         tokenizer.pre_tokenizer = Whitespace()
-        trainer = BpeTrainer(special_tokens=[UNK, PAD, SOS, EOS, ' ', '?', '!'], max_token_length=1, min_frequency=1)
+        trainer = BpeTrainer(special_tokens=[UNK, PAD, SOS, EOS, " ", "?", "!"], max_token_length=1, min_frequency=1)
         tokenizer.train_from_iterator(sorted(list(set(ds))), trainer=trainer)
         tokenizer.save(str(tokenizer_path))
     else:
@@ -60,7 +60,7 @@ def get_or_build_tokenizer8(config: dict, model_folder: str, ds: str, lang: str)
 
 
 def get_tokenizer8(config: dict, model_folder: str, lang: str) -> Tokenizer:
-    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
+    tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
         raise ValueError(f"{tokenizer_path} Tokenizer does not exist")
@@ -72,7 +72,7 @@ def get_tokenizer8(config: dict, model_folder: str, lang: str) -> Tokenizer:
 def load_custom_dataset(config: dict, model_folder: str) -> str:
     src_file = f"custom_datasets/{config['datasource']}/{config['lang_src']}.txt"
 
-    with open(src_file, 'r', encoding='utf-8') as file:
+    with open(src_file, "r", encoding="utf-8") as file:
         # src_sentences = file.readlines()
         src_sentences = file.read()
 
@@ -82,17 +82,17 @@ def load_custom_dataset(config: dict, model_folder: str) -> str:
 def get_ds8(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Dataset8, Dataset8]:
 
     raw_text = load_custom_dataset(config, model_folder)
-    tokenizer = get_or_build_tokenizer8(config, model_folder, raw_text, config['lang_src'])
+    tokenizer = get_or_build_tokenizer8(config, model_folder, raw_text, config["lang_src"])
 
     # keep 90% for training and 10% for validation
     # train_ds_size = int(0.9 * len(ds_raw))
     # val_ds_size = len(ds_raw) - train_ds_size
     # train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
 
-    n = int(0.9*len(raw_text))  # first 90% will be train, rest val
+    n = int(0.9 * len(raw_text))  # first 90% will be train, rest val
 
-    batch_size = config['batch_size']
-    block_size = config['block_size']  # what is the maximum context length for predictions?
+    batch_size = config["batch_size"]
+    block_size = config["block_size"]  # what is the maximum context length for predictions?
     train_ds = Dataset8(raw_text[:n], tokenizer=tokenizer, batch_size=batch_size, block_size=block_size)
     val_ds = Dataset8(raw_text[n:], tokenizer=tokenizer, batch_size=batch_size, block_size=block_size)
 
@@ -107,7 +107,7 @@ def get_ds8(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
 def get_testing_ds8(config: dict, model_folder: str) -> Tokenizer:
 
     # build tokenizers
-    tokenizer = get_tokenizer8(config, model_folder, config['lang_src'])
+    tokenizer = get_tokenizer8(config, model_folder, config["lang_src"])
 
     return tokenizer
 
@@ -119,12 +119,16 @@ def local_tokenizer(text: str):
     # create a mapping from characters to integers
     stoi = {ch: i for i, ch in enumerate(chars)}
     itos = {i: ch for i, ch in enumerate(chars)}
-    def encode(s): return [stoi[c] for c in s]  # encoder: take a string, output a list of integers
-    def decode(l): return ''.join([itos[i] for i in l])  # decoder: take a list of integers, output a string
+
+    def encode(s):
+        return [stoi[c] for c in s]  # encoder: take a string, output a list of integers
+
+    def decode(l):
+        return "".join([itos[i] for i in l])  # decoder: take a list of integers, output a string
 
     # Train and test splits
     data = torch.tensor(encode(text), dtype=torch.long)
-    n = int(0.9*len(data))  # first 90% will be train, rest val
+    n = int(0.9 * len(data))  # first 90% will be train, rest val
     train_data = data[:n]
     val_data = data[n:]
     return train_data, val_data
@@ -139,12 +143,12 @@ def local_testing():
     tokenizer = get_or_build_tokenizer8(config, modelfolder, raw_text, "en")
 
     # data = torch.tensor(tokenizer.encode(raw_text).ids, dtype=torch.long)
-    n = int(0.9*len(raw_text))  # first 90% will be train, rest val
+    n = int(0.9 * len(raw_text))  # first 90% will be train, rest val
 
     torch.manual_seed(1337)
 
-    batch_size = config['batch_size']
-    block_size = config['block_size']
+    batch_size = config["batch_size"]
+    block_size = config["block_size"]
 
     local_train_data, local_val_data = local_tokenizer(raw_text)
     print(local_train_data[:256])
@@ -171,7 +175,7 @@ def local_testing():
         #         target = yb[b, t]
         #         print(f"when input is {context.tolist()} the target: {target}")
 
-        if (batch_num == 0):
+        if batch_num == 0:
             break
 
 

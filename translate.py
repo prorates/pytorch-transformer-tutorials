@@ -21,11 +21,11 @@ def main(argv):
     try:
         opts, args = getopt.getopt(argv, "hc:m:s:", ["config=", "modelfolder=", "sentence="])
     except getopt.GetoptError:
-        print('translate.py -c <config_file> -m <model_folder> -s <sentence>')
+        print("translate.py -c <config_file> -m <model_folder> -s <sentence>")
         sys.exit(2)
     for opt, arg in opts:
-        if opt == '-h':
-            print('translate.py -c <config_file> -m <model_folder> -s <sentence>')
+        if opt == "-h":
+            print("translate.py -c <config_file> -m <model_folder> -s <sentence>")
             sys.exit()
         elif opt in ("-c", "--config"):
             config_filename = arg
@@ -37,7 +37,7 @@ def main(argv):
     # warnings.filterwarnings('ignore')
     config = get_config(config_filename, model_folder)
 
-    match config['alt_model']:
+    match config["alt_model"]:
         case "model1":
             _ = translate1(config, sentence)
         case "model2":

@@ -21,8 +21,7 @@ from config import EOS, SOS, PAD, UNK
 
 class Dataset1(Dataset):
 
-    def __init__(self, ds: Dataset, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer,
-                 src_lang: str, tgt_lang: str, seq_len: int) -> None:
+    def __init__(self, ds: Dataset, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer, src_lang: str, tgt_lang: str, seq_len: int) -> None:
         super().__init__()
 
         self.ds = ds
@@ -47,8 +46,8 @@ class Dataset1(Dataset):
 
     def __getitem__(self, idx: Any) -> Any:
         src_target_pair = self.ds[idx]
-        src_text = src_target_pair['translation'][self.src_lang]
-        tgt_text = src_target_pair['translation'][self.tgt_lang]
+        src_text = src_target_pair["translation"][self.src_lang]
+        tgt_text = src_target_pair["translation"][self.tgt_lang]
 
         # Transform the text into tokens
         enc_input_tokens = self.tokenizer_src.encode(src_text).ids
@@ -65,7 +64,7 @@ class Dataset1(Dataset):
 
         # Make sure the number of padding tokens is not negative. If it is, the sentence is too long
         if (enc_num_padding_tokens < 0) or (dec_num_padding_tokens < 0):
-            raise ValueError('Sentence is too long')
+            raise ValueError("Sentence is too long")
 
         # Add SOS and EOS to source text
         encoder_input = torch.cat(
@@ -115,7 +114,7 @@ class Dataset1(Dataset):
             "decoder_mask": (decoder_input != self.pad_token).unsqueeze(0).int() & casual_mask(decoder_input.size(0)),
             "label": label,  # (SeqLen)
             "src_text": src_text,
-            "tgt_text": tgt_text
+            "tgt_text": tgt_text,
         }
 
 
@@ -137,11 +136,11 @@ def translation_mask(size: int) -> Tensor:
 
 def get_all_sentences1(ds, lang):
     for item in ds:
-        yield item['translation'][lang]
+        yield item["translation"][lang]
 
 
 def get_or_build_tokenizer1(config: dict, model_folder: str, ds, lang: str) -> Tokenizer:
-    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
+    tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         # Most code taken from: https://huggingface.co/docs/tokenizers/quicktour
         tokenizer = Tokenizer(WordLevel(unk_token=UNK))
@@ -155,7 +154,7 @@ def get_or_build_tokenizer1(config: dict, model_folder: str, ds, lang: str) -> T
 
 
 def get_tokenizer1(config: dict, model_folder: str, lang: str) -> Tokenizer:
-    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format(lang) + ".json")
+    tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
         raise ValueError(f"{tokenizer_path} Tokenizer does not exist")
@@ -166,35 +165,33 @@ def get_tokenizer1(config: dict, model_folder: str, lang: str) -> Tokenizer:
 
 def get_ds1(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
     # load_dataset(path, name, split=)
-    ds_raw = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='train')
+    ds_raw = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split="train")
 
     # build tokenizers
-    tokenizer_src = get_or_build_tokenizer1(config, model_folder, ds_raw, config['lang_src'])
-    tokenizer_tgt = get_or_build_tokenizer1(config, model_folder, ds_raw, config['lang_tgt'])
+    tokenizer_src = get_or_build_tokenizer1(config, model_folder, ds_raw, config["lang_src"])
+    tokenizer_tgt = get_or_build_tokenizer1(config, model_folder, ds_raw, config["lang_tgt"])
 
     # keep 90% for training and 10% for validation
     train_ds_size = int(0.9 * len(ds_raw))
     val_ds_size = len(ds_raw) - train_ds_size
     train_ds_raw, val_ds_raw = random_split(ds_raw, [train_ds_size, val_ds_size])
 
-    train_ds = Dataset1(train_ds_raw, tokenizer_src, tokenizer_tgt,
-                        config['lang_src'], config['lang_tgt'], config['seq_len'])
-    val_ds = Dataset1(val_ds_raw, tokenizer_src, tokenizer_tgt,
-                      config['lang_src'], config['lang_tgt'], config['seq_len'])
+    train_ds = Dataset1(train_ds_raw, tokenizer_src, tokenizer_tgt, config["lang_src"], config["lang_tgt"], config["seq_len"])
+    val_ds = Dataset1(val_ds_raw, tokenizer_src, tokenizer_tgt, config["lang_src"], config["lang_tgt"], config["seq_len"])
 
     max_len_src = 0
     max_len_tgt = 0
 
     for item in ds_raw:
-        src_ids = tokenizer_src.encode(item['translation'][config['lang_src']]).ids
-        tgt_ids = tokenizer_tgt.encode(item['translation'][config['lang_tgt']]).ids
+        src_ids = tokenizer_src.encode(item["translation"][config["lang_src"]]).ids
+        tgt_ids = tokenizer_tgt.encode(item["translation"][config["lang_tgt"]]).ids
         max_len_src = max(max_len_src, len(src_ids))
         max_len_tgt = max(max_len_tgt, len(tgt_ids))
 
-    print(f'Max length of source sentence: {max_len_src}')
-    print(f'Max length of target sentence: {max_len_tgt}')
+    print(f"Max length of source sentence: {max_len_src}")
+    print(f"Max length of target sentence: {max_len_tgt}")
 
-    train_dataloader = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
+    train_dataloader = DataLoader(train_ds, batch_size=config["batch_size"], shuffle=True)
     val_dataloader = DataLoader(val_ds, batch_size=1, shuffle=True)
 
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
@@ -203,17 +200,16 @@ def get_ds1(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
 def get_testing_ds1(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:
 
     # build tokenizers
-    tokenizer_src = get_tokenizer1(config, model_folder, config['lang_src'])
-    tokenizer_tgt = get_tokenizer1(config, model_folder, config['lang_tgt'])
+    tokenizer_src = get_tokenizer1(config, model_folder, config["lang_src"])
+    tokenizer_tgt = get_tokenizer1(config, model_folder, config["lang_tgt"])
 
     # keep 90% for training and 10% for validation
     label = None
     if isinstance(sentence, int) or sentence.isdigit():
         id = int(sentence)
-        ds = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split='all')
-        ds = Dataset1(ds, tokenizer_src, tokenizer_tgt,
-                      config['lang_src'], config['lang_tgt'], config['seq_len'])
-        sentence = ds[id]['src_text']
+        ds = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split="all")
+        ds = Dataset1(ds, tokenizer_src, tokenizer_tgt, config["lang_src"], config["lang_tgt"], config["seq_len"])
+        sentence = ds[id]["src_text"]
         label = ds[id]["tgt_text"]
 
     return sentence, label, tokenizer_src, tokenizer_tgt

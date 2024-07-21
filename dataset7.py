@@ -45,12 +45,12 @@ class Dataset7(Dataset):
         Returns:
             Tensor of shape ``[N // bsz, bsz]``
         """
-        # Given a 1-D vector of sequential data, batchify() arranges the data into bsz/batch_size columns. 
-        # If the data does not divide evenly into bsz columns, then the data is trimmed to fit. 
-        # For instance, with the alphabet as the data (total length of 26) and bsz=4, we would divide the 
+        # Given a 1-D vector of sequential data, batchify() arranges the data into bsz/batch_size columns.
+        # If the data does not divide evenly into bsz columns, then the data is trimmed to fit.
+        # For instance, with the alphabet as the data (total length of 26) and bsz=4, we would divide the
         # alphabet into sequences/rows of length 6, resulting in 4 columns of such sequences/rows.
         seq_len = processed_data.size(0) // bsz
-        batchified_data = processed_data[:seq_len * bsz]
+        batchified_data = processed_data[: seq_len * bsz]
         batchified_data = batchified_data.view(bsz, seq_len).t().contiguous()
         # return data.to(device)
         return batchified_data
@@ -72,12 +72,12 @@ class Dataset7(Dataset):
         # According to explanation this would return row (A,G,M,S) and (B,H,N,T)
         # The other explantion is that is picks bsz=4 contexts of length bptt=2
         seq_len = min(self.bptt, len(self.batchified_data) - 1 - i)
-        data = self.batchified_data[i:i+seq_len]
+        data = self.batchified_data[i : i + seq_len]
         # From row i+1, the next bptt rows in each columns
         # According to explanation this would return row (B,H,N,T) and (C,I,O,U)
         # The target is always the context+1
         # Then flat out the bsz * bptt matrix
-        target = self.batchified_data[i+1:i+1+seq_len].reshape(-1)
+        target = self.batchified_data[i + 1 : i + 1 + seq_len].reshape(-1)
         return data, target
 
     def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
@@ -92,9 +92,9 @@ class Dataset7(Dataset):
 
 
 def get_or_build_tokenizer7(config: dict, model_folder: str) -> Tokenizer:
-    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format("en") + ".json")
+    tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format("en") + ".json")
     if not Path.exists(tokenizer_path):
-        train_iter = WikiText2(split='train')
+        train_iter = WikiText2(split="train")
         tokenizer = Tokenizer(WordLevel(unk_token=UNK))
         tokenizer.pre_tokenizer = Whitespace()
         trainer = WordLevelTrainer(special_tokens=[UNK, PAD, SOS, EOS], min_frequency=2)
@@ -106,7 +106,7 @@ def get_or_build_tokenizer7(config: dict, model_folder: str) -> Tokenizer:
 
 
 def get_tokenizer7(config: dict, model_folder: str) -> Tokenizer:
-    tokenizer_path = Path(model_folder + "/" + config['tokenizer_file'].format("en") + ".json")
+    tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format("en") + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
         raise ValueError(f"{tokenizer_path} Tokenizer does not exist")
@@ -137,7 +137,7 @@ def get_ds7(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Da
 
 
 def local_testing():
-    vocab_iter = WikiText2(split='train')
+    vocab_iter = WikiText2(split="train")
     tokenizer = Tokenizer(WordLevel(unk_token=UNK))
     tokenizer.pre_tokenizer = Whitespace()
     trainer = WordLevelTrainer(special_tokens=[UNK, PAD, SOS, EOS], min_frequency=2)
@@ -146,14 +146,14 @@ def local_testing():
     # ``train_iter`` was "consumed" by the process of building the vocab,
     # so we have to create it again
     bptt = 35
-    train_iter = WikiText2(split='train')
+    train_iter = WikiText2(split="train")
     train_ds = Dataset7(train_iter, tokenizer, bsz=20, bptt=35)
     train_data = train_ds.batchified_data
 
     num_batches = len(train_data) // bptt
     for batch, i in enumerate(range(0, train_data.size(0) - 1, bptt)):
         data, targets = train_ds.get_batch(i)
-        print('.................')
+        print(".................")
         print(data.shape)
         print(targets.shape)
 

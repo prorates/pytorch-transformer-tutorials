@@ -97,12 +97,12 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0)  # 1 (1, Seq_Len, d_model)
 
         # we want the tensor to be saved with the model but not as parameter
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x) -> Tensor:
         # we need to the positional encoding to every word in the sentence
         # that self.pe is fixed and does not need to be learned, hence requires_grad set to False
-        x = x + (self.pe[:, :x.shape[1], :]).requires_grad_(False)
+        x = x + (self.pe[:, : x.shape[1], :]).requires_grad_(False)
         return self.dropout(x)
 
 
@@ -130,6 +130,7 @@ class ResidualConnection(nn.Module):
 # We combine back teh HEAD matrices and multtiple by W0.
 # We obtain a matrix with the same dimension as the input matrix.
 # We also have to account for the batch dimension if you have more than one sentence.
+
 
 class MultiHeadAttentionBlock(nn.Module):
 
@@ -193,8 +194,7 @@ class MultiHeadAttentionBlock(nn.Module):
 
 class EncoderBlock(nn.Module):
 
-    def __init__(self, features: int, self_attention_block: MultiHeadAttentionBlock,
-                 feed_forward_block: FeedForwardBlock, dropout: float) -> None:
+    def __init__(self, features: int, self_attention_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
         super().__init__()
         self.self_attention_block = self_attention_block
         self.feed_forward_block = feed_forward_block
@@ -230,8 +230,14 @@ class Encoder(nn.Module):
 
 class DecoderBlock(nn.Module):
 
-    def __init__(self, features: int, self_attention_block: MultiHeadAttentionBlock,
-                 cross_attention_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
+    def __init__(
+        self,
+        features: int,
+        self_attention_block: MultiHeadAttentionBlock,
+        cross_attention_block: MultiHeadAttentionBlock,
+        feed_forward_block: FeedForwardBlock,
+        dropout: float,
+    ) -> None:
         super().__init__()
         self.self_attention_block = self_attention_block
         self.cross_attention_block = cross_attention_block
@@ -245,8 +251,7 @@ class DecoderBlock(nn.Module):
         # x (decoder side) is used for q, k and v
         x = self.residual_connections[0](x, lambda x: self.self_attention_block(x, x, x, tgt_mask))
         # x (decoder side) is used for q. k and v are coming from encoder side
-        x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x,
-                                         encoder_ouput, encoder_ouput, src_mask))
+        x = self.residual_connections[1](x, lambda x: self.cross_attention_block(x, encoder_ouput, encoder_ouput, src_mask))
         # third connection is the feedfoward. No Lambda needed. Why ?
         x = self.residual_connections[2](x, self.feed_forward_block)
         return x
@@ -289,8 +294,16 @@ class ProjectionLayer(nn.Module):
 
 class Transformer1(nn.Module):
 
-    def __init__(self, encoder: Encoder, decoder: Decoder, src_embed: InputEmbeddings, tgt_embed: InputEmbeddings,
-                 src_pos: PositionalEncoding, tgt_pos: PositionalEncoding, projection_layer: ProjectionLayer) -> None:
+    def __init__(
+        self,
+        encoder: Encoder,
+        decoder: Decoder,
+        src_embed: InputEmbeddings,
+        tgt_embed: InputEmbeddings,
+        src_pos: PositionalEncoding,
+        tgt_pos: PositionalEncoding,
+        projection_layer: ProjectionLayer,
+    ) -> None:
         super().__init__()
         self.encoder = encoder
         self.decoder = decoder
@@ -319,8 +332,7 @@ class Transformer1(nn.Module):
     def project(self, x: Tensor) -> Tensor:
         return self.projection_layer(x)
 
-    def greedy_decode(self, source: Tensor, source_mask: Tensor, eos_idx: int,
-                      sos_idx: int, max_len: int, device):
+    def greedy_decode(self, source: Tensor, source_mask: Tensor, eos_idx: int, sos_idx: int, max_len: int, device):
 
         # Precompute the encoder output and reuse it for every step
         # source is (1, SeqLen, d_model) and source_mask (1, SeqLen, d_model)
@@ -358,9 +370,7 @@ class Transformer1(nn.Module):
             _, next_word = torch.max(prob, dim=1)
 
             # We happen the next token to the decoder_input and feed to the decoder again
-            decoder_input = torch.cat(
-                [decoder_input, torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(device)], dim=1
-            )
+            decoder_input = torch.cat([decoder_input, torch.empty(1, 1).type_as(source).fill_(next_word.item()).to(device)], dim=1)
 
             # print the translated word
             # print(f"{tokenizer_tgt.decode([next_word.item()])}", end=' ')
@@ -375,8 +385,17 @@ class Transformer1(nn.Module):
         return decoder_input[0]
 
 
-def build_transformer1(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int,
-                       d_model: int = 512, N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048) -> Transformer1:
+def build_transformer1(
+    src_vocab_size: int,
+    tgt_vocab_size: int,
+    src_seq_len: int,
+    tgt_seq_len: int,
+    d_model: int = 512,
+    N: int = 6,
+    h: int = 8,
+    dropout: float = 0.1,
+    d_ff: int = 2048,
+) -> Transformer1:
     # Create the embedding layer
     src_embed = InputEmbeddings(d_model, src_vocab_size)
     tgt_embed = InputEmbeddings(d_model, tgt_vocab_size)
@@ -400,12 +419,7 @@ def build_transformer1(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: in
         decoder_self_attention_block = MultiHeadAttentionBlock(d_model, h, dropout)
         decoder_cross_attention_block = MultiHeadAttentionBlock(d_model, h, dropout)
         decoder_feed_forward_block = FeedForwardBlock(d_model, d_ff, dropout)
-        decoder_block = DecoderBlock(
-            d_model,
-            decoder_self_attention_block,
-            decoder_cross_attention_block,
-            decoder_feed_forward_block,
-            dropout)
+        decoder_block = DecoderBlock(d_model, decoder_self_attention_block, decoder_cross_attention_block, decoder_feed_forward_block, dropout)
         decoder_blocks.append(decoder_block)
 
     # Create the encoder and decoder

@@ -32,7 +32,7 @@ class PositionalEncoding(nn.Module):
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
         r"""Inputs of forward function
@@ -45,7 +45,7 @@ class PositionalEncoding(nn.Module):
             >>> output = pos_encoder(x)
         """
 
-        x = x + self.pe[:x.size(0), :]
+        x = x + self.pe[: x.size(0), :]
         return self.dropout(x)
 
 
@@ -54,7 +54,7 @@ class Transformer4(nn.Transformer):
 
     def __init__(self, ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
         super().__init__(d_model=ninp, nhead=nhead, dim_feedforward=nhid, num_encoder_layers=nlayers)
-        self.model_type = 'Transformer'
+        self.model_type = "Transformer"
         self.src_mask = None
         self.pos_encoder = PositionalEncoding(ninp, dropout)
 
@@ -66,7 +66,7 @@ class Transformer4(nn.Transformer):
 
     def _generate_square_subsequent_mask(self, sz):
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        mask = mask.float().masked_fill(mask == 0, float("-inf")).masked_fill(mask == 1, float(0.0))
         return mask
 
     def init_weights(self):
@@ -91,8 +91,17 @@ class Transformer4(nn.Transformer):
         return F.log_softmax(output, dim=-1)
 
 
-def build_transformer4(src_vocab_size: int, tgt_vocab_size: int, src_seq_len: int, tgt_seq_len: int,
-                       d_model: int = 512, N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048) -> Transformer4:
+def build_transformer4(
+    src_vocab_size: int,
+    tgt_vocab_size: int,
+    src_seq_len: int,
+    tgt_seq_len: int,
+    d_model: int = 512,
+    N: int = 6,
+    h: int = 8,
+    dropout: float = 0.1,
+    d_ff: int = 2048,
+) -> Transformer4:
 
     # Create the transformer
     transformer = Transformer4(tgt_vocab_size, d_model, h, d_ff, N, dropout)

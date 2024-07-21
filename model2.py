@@ -57,6 +57,7 @@ class MultiHeadAttention(nn.Module):
         output = self.W_o(self.combine_heads(attn_output))
         return output
 
+
 # JEB: This block does have a drouput
 # JEB: Compare to FeedForwardBlock at line 34 in model.py
 
@@ -87,12 +88,12 @@ class PositionalEncoding(nn.Module):
         pe[:, 1::2] = torch.cos(position * div_term)
 
         # JEB: Looks like everybody is copy pasting the behavior
-        self.register_buffer('pe', pe.unsqueeze(0))
+        self.register_buffer("pe", pe.unsqueeze(0))
 
     def forward(self, x):
         # JEB: The dimmension of the pe function are different
         # the requires_grad(False) is not activated
-        return x + self.pe[:, :x.size(1)]
+        return x + self.pe[:, : x.size(1)]
 
 
 class EncoderLayer(nn.Module):
@@ -110,6 +111,7 @@ class EncoderLayer(nn.Module):
         ff_output = self.feed_forward(x)
         x = self.norm2(x + self.dropout(ff_output))
         return x
+
 
 # JEB: This code matches the DecoderBlock at line 221
 
@@ -140,17 +142,14 @@ class DecoderLayer(nn.Module):
 
 
 class Transformer2(nn.Module):
-    def __init__(self, src_vocab_size: int, tgt_vocab_size: int, d_model: int,
-                 num_heads: int, num_layers: int, d_ff, max_seq_length: int, dropout):
+    def __init__(self, src_vocab_size: int, tgt_vocab_size: int, d_model: int, num_heads: int, num_layers: int, d_ff, max_seq_length: int, dropout):
         super(Transformer2, self).__init__()
         self.encoder_embedding = nn.Embedding(src_vocab_size, d_model)
         self.decoder_embedding = nn.Embedding(tgt_vocab_size, d_model)
         self.positional_encoding = PositionalEncoding(d_model, max_seq_length)
 
-        self.encoder_layers = nn.ModuleList(
-            [EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
-        self.decoder_layers = nn.ModuleList(
-            [DecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+        self.encoder_layers = nn.ModuleList([EncoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
+        self.decoder_layers = nn.ModuleList([DecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)])
 
         self.fc = nn.Linear(d_model, tgt_vocab_size)
         self.dropout = nn.Dropout(dropout)
@@ -171,7 +170,8 @@ class Transformer2(nn.Module):
         return output
 
 
-def build_transformer2(src_vocab_size: int, tgt_vocab_size: int, max_seq_len: int, d_model: int = 512,
-                       N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048) -> Transformer2:
+def build_transformer2(
+    src_vocab_size: int, tgt_vocab_size: int, max_seq_len: int, d_model: int = 512, N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048
+) -> Transformer2:
     transformer = Transformer2(src_vocab_size, tgt_vocab_size, d_model, h, N, d_ff, max_seq_len, dropout)
     return transformer

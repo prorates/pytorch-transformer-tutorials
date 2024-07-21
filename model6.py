@@ -31,9 +31,8 @@ class PositionalEncoding(nn.Module):
 
     def forward(self) -> Tensor:
         even_i = torch.arange(0, self.d_model, 2).float()
-        denominator = torch.pow(10000, even_i/self.d_model)
-        position = (torch.arange(self.max_sequence_length)
-                    .reshape(self.max_sequence_length, 1))
+        denominator = torch.pow(10000, even_i / self.d_model)
+        position = torch.arange(self.max_sequence_length).reshape(self.max_sequence_length, 1)
         even_PE = torch.sin(position / denominator)
         odd_PE = torch.cos(position / denominator)
         stacked = torch.stack([even_PE, odd_PE], dim=2)
@@ -184,13 +183,22 @@ class SequentialEncoder(nn.Sequential):
 
 
 class Encoder(nn.Module):
-    def __init__(self, d_model: int, ffn_hidden: int, num_heads: int, drop_prob, num_layers: int, max_sequence_length: int, language_to_index: dict,
-                 START_TOKEN: int, END_TOKEN: int, PADDING_TOKEN: int):
+    def __init__(
+        self,
+        d_model: int,
+        ffn_hidden: int,
+        num_heads: int,
+        drop_prob,
+        num_layers: int,
+        max_sequence_length: int,
+        language_to_index: dict,
+        START_TOKEN: int,
+        END_TOKEN: int,
+        PADDING_TOKEN: int,
+    ):
         super().__init__()
-        self.sentence_embedding = SentenceEmbedding(
-            max_sequence_length, d_model, language_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN)
-        self.layers = SequentialEncoder(*[EncoderLayer(d_model, ffn_hidden, num_heads, drop_prob)
-                                          for _ in range(num_layers)])
+        self.sentence_embedding = SentenceEmbedding(max_sequence_length, d_model, language_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN)
+        self.layers = SequentialEncoder(*[EncoderLayer(d_model, ffn_hidden, num_heads, drop_prob) for _ in range(num_layers)])
 
     # forward returns a (bs, SeqLen, d_model) Tensor
     def forward(self, encoder_batched_sentences: tuple[str], self_attention_mask: Tensor, start_token: bool, end_token: bool) -> Tensor:
@@ -281,16 +289,33 @@ class SequentialDecoder(nn.Sequential):
 
 
 class Decoder(nn.Module):
-    def __init__(self, d_model: int, ffn_hidden: int, num_heads: int, drop_prob, num_layers: int, max_sequence_length: int, language_to_index: dict,
-                 START_TOKEN: int, END_TOKEN: int, PADDING_TOKEN: int):
+    def __init__(
+        self,
+        d_model: int,
+        ffn_hidden: int,
+        num_heads: int,
+        drop_prob,
+        num_layers: int,
+        max_sequence_length: int,
+        language_to_index: dict,
+        START_TOKEN: int,
+        END_TOKEN: int,
+        PADDING_TOKEN: int,
+    ):
         super().__init__()
-        self.sentence_embedding = SentenceEmbedding(
-            max_sequence_length, d_model, language_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN)
-        self.layers = SequentialDecoder(
-            *[DecoderLayer(d_model, ffn_hidden, num_heads, drop_prob) for _ in range(num_layers)])
+        self.sentence_embedding = SentenceEmbedding(max_sequence_length, d_model, language_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN)
+        self.layers = SequentialDecoder(*[DecoderLayer(d_model, ffn_hidden, num_heads, drop_prob) for _ in range(num_layers)])
 
     # forward returns a (bs, SeqLen, d_model) Tensor
-    def forward(self, encoder_out: Tensor, decoder_batched_sentences: tuple[str], self_attention_mask: Tensor, cross_attention_mask: Tensor, start_token: bool, end_token: bool) -> Tensor:
+    def forward(
+        self,
+        encoder_out: Tensor,
+        decoder_batched_sentences: tuple[str],
+        self_attention_mask: Tensor,
+        cross_attention_mask: Tensor,
+        start_token: bool,
+        end_token: bool,
+    ) -> Tensor:
         # The input of the decoder will include the start_token but not the end_token
         # The ouput of the decoder will not include the start_token but will include the end_token
         # encoder_out shape is (bs, SeqLen, d_model)
@@ -302,34 +327,57 @@ class Decoder(nn.Module):
 
 
 class Transformer6(nn.Module):
-    def __init__(self, d_model: int, ffn_hidden: int, num_heads: int, drop_prob, num_layers: int, max_sequence_length: int, kn_vocab_size: int,
-                 english_to_index: dict, kannada_to_index: dict,
-                 START_TOKEN: int, END_TOKEN: int, PADDING_TOKEN: int):
+    def __init__(
+        self,
+        d_model: int,
+        ffn_hidden: int,
+        num_heads: int,
+        drop_prob,
+        num_layers: int,
+        max_sequence_length: int,
+        kn_vocab_size: int,
+        english_to_index: dict,
+        kannada_to_index: dict,
+        START_TOKEN: int,
+        END_TOKEN: int,
+        PADDING_TOKEN: int,
+    ):
         super().__init__()
-        self.encoder = Encoder(d_model, ffn_hidden, num_heads, drop_prob, num_layers,
-                               max_sequence_length, english_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN)
-        self.decoder = Decoder(d_model, ffn_hidden, num_heads, drop_prob, num_layers,
-                               max_sequence_length, kannada_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN)
+        self.encoder = Encoder(
+            d_model, ffn_hidden, num_heads, drop_prob, num_layers, max_sequence_length, english_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN
+        )
+        self.decoder = Decoder(
+            d_model, ffn_hidden, num_heads, drop_prob, num_layers, max_sequence_length, kannada_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN
+        )
         self.linear = nn.Linear(d_model, kn_vocab_size)
         self.device = get_device()  # torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
     # forward returns a (bs, SeqLen, vocab_size) Tensor
-    def forward(self,
-                encoder_batched_sentences: tuple[str],
-                decoder_batched_sentences: tuple[str],
-                encoder_self_attention_mask: Tensor = None,
-                decoder_self_attention_mask: Tensor = None,
-                decoder_cross_attention_mask: Tensor = None,
-                enc_start_token: bool = False,
-                enc_end_token: bool = False,
-                dec_start_token: bool = False,  # JEB: ? We should make this true
-                dec_end_token: bool = False) -> Tensor:
-        encoder_out = self.encoder(encoder_batched_sentences, encoder_self_attention_mask,
-                                   start_token=enc_start_token, end_token=enc_end_token)  # (bs, SeqLen, d_model)
+    def forward(
+        self,
+        encoder_batched_sentences: tuple[str],
+        decoder_batched_sentences: tuple[str],
+        encoder_self_attention_mask: Tensor = None,
+        decoder_self_attention_mask: Tensor = None,
+        decoder_cross_attention_mask: Tensor = None,
+        enc_start_token: bool = False,
+        enc_end_token: bool = False,
+        dec_start_token: bool = False,  # JEB: ? We should make this true
+        dec_end_token: bool = False,
+    ) -> Tensor:
+        encoder_out = self.encoder(
+            encoder_batched_sentences, encoder_self_attention_mask, start_token=enc_start_token, end_token=enc_end_token
+        )  # (bs, SeqLen, d_model)
         # The input of the decoder will include the start_token but not the end_token
         # The ouput of the decoder will not include the start_token but will include the end_token
-        decoder_out = self.decoder(encoder_out, decoder_batched_sentences, decoder_self_attention_mask, decoder_cross_attention_mask,
-                                   start_token=dec_start_token, end_token=dec_end_token)  # (bs, SeqLen, d_model)
+        decoder_out = self.decoder(
+            encoder_out,
+            decoder_batched_sentences,
+            decoder_self_attention_mask,
+            decoder_cross_attention_mask,
+            start_token=dec_start_token,
+            end_token=dec_end_token,
+        )  # (bs, SeqLen, d_model)
         decoder_out = self.linear(decoder_out)  # (bs, SeqLen, vocab_size)
         return decoder_out
 
@@ -338,35 +386,60 @@ class Transformer6(nn.Module):
         predicated_batched_sentences = ("",)  # tuple[str]
         for word_counter in range(max_len):
             encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
-                src_batched_sentences, predicated_batched_sentences, max_len)
-            predictions = self.forward(src_batched_sentences,
-                                       predicated_batched_sentences,
-                                       encoder_self_attention_mask.to(device),
-                                       decoder_self_attention_mask.to(device),
-                                       decoder_cross_attention_mask.to(device),
-                                       enc_start_token=False,  # During training, model6 does not add sos to encoder input
-                                       enc_end_token=False,  # During training, model6 does not add sos to encoder input
-                                       dec_start_token=True,  # During training, model6 DOES add sos to decoder input
-                                       dec_end_token=False)  # During training, model6 DOES add eos to decoder input
+                src_batched_sentences, predicated_batched_sentences, max_len
+            )
+            predictions = self.forward(
+                src_batched_sentences,
+                predicated_batched_sentences,
+                encoder_self_attention_mask.to(device),
+                decoder_self_attention_mask.to(device),
+                decoder_cross_attention_mask.to(device),
+                enc_start_token=False,  # During training, model6 does not add sos to encoder input
+                enc_end_token=False,  # During training, model6 does not add sos to encoder input
+                dec_start_token=True,  # During training, model6 DOES add sos to decoder input
+                dec_end_token=False,
+            )  # During training, model6 DOES add eos to decoder input
 
             next_token_prob_distribution = predictions[0][word_counter]  # not actual probs
             next_token_index = torch.argmax(next_token_prob_distribution).item()
             next_token = index_to_tgt[next_token_index]
             if next_token == EOS:
                 break
-            predicated_batched_sentences = (predicated_batched_sentences[0] + next_token, )
+            predicated_batched_sentences = (predicated_batched_sentences[0] + next_token,)
 
         return predicated_batched_sentences
 
 
-def build_transformer6(src_vocab_size: int, tgt_vocab_size: int, src_to_index: dict, tgt_to_index: dict,
-                       src_seq_len: int, tgt_seq_len: int,
-                       d_model: int = 512, N: int = 6, h: int = 8, dropout: float = 0.1, d_ff: int = 2048) -> Transformer6:
+def build_transformer6(
+    src_vocab_size: int,
+    tgt_vocab_size: int,
+    src_to_index: dict,
+    tgt_to_index: dict,
+    src_seq_len: int,
+    tgt_seq_len: int,
+    d_model: int = 512,
+    N: int = 6,
+    h: int = 8,
+    dropout: float = 0.1,
+    d_ff: int = 2048,
+) -> Transformer6:
 
     # Create the transformer
     # JEB: TODO. Need to use the tokenizer instead
-    transformer = Transformer6(d_model=d_model, ffn_hidden=d_ff, num_heads=h, drop_prob=dropout, num_layers=N, max_sequence_length=tgt_seq_len,
-                               kn_vocab_size=tgt_vocab_size, english_to_index=src_to_index, kannada_to_index=tgt_to_index, START_TOKEN=SOS, END_TOKEN=EOS, PADDING_TOKEN=PAD)
+    transformer = Transformer6(
+        d_model=d_model,
+        ffn_hidden=d_ff,
+        num_heads=h,
+        drop_prob=dropout,
+        num_layers=N,
+        max_sequence_length=tgt_seq_len,
+        kn_vocab_size=tgt_vocab_size,
+        english_to_index=src_to_index,
+        kannada_to_index=tgt_to_index,
+        START_TOKEN=SOS,
+        END_TOKEN=EOS,
+        PADDING_TOKEN=PAD,
+    )
 
     # When computing the loss, we are ignoring cases when the label is the padding token
     for params in transformer.parameters():

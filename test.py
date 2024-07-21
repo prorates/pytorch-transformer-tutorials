@@ -11,7 +11,7 @@ from tutorial5 import debug_code_model5
 from tutorial6 import debug_code_model6
 from tutorial7 import debug_code_model7
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # warnings.filterwarnings('ignore')
     config = get_config()
     device = get_device()
