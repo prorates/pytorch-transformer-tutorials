@@ -10,7 +10,7 @@ from tutorial3 import train_model3
 from tutorial4 import train_model4
 from tutorial5 import train_model5
 from tutorial6 import train_model6
-from tutorial7 import train_model7
+# from tutorial7 import train_model7
 from tutorial8 import train_model8
 
 
