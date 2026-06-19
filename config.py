@@ -1,8 +1,12 @@
-from typing import Optional
-from pathlib import Path
 import os
+from pathlib import Path
+from typing import Any
+
 import torch
 import yaml
+
+# Config dicts mix value types (str/int/float/None), so values are Any.
+ConfigDict = dict[str, Any]
 
 EOS = "<eos>"
 SOS = "<sos>"
@@ -10,7 +14,7 @@ UNK = "<unk>"
 PAD = "<pad>"
 
 
-def get_default_config() -> dict:
+def get_default_config() -> ConfigDict:
     return {
         "batch_size": 8,
         "block_size": 32,  # Added for model2
@@ -35,7 +39,7 @@ def get_default_config() -> dict:
     }
 
 
-def get_config(filename: Optional[str] = None, modelfolder: Optional[str] = None) -> dict:
+def get_config(filename: str | None = None, modelfolder: str | None = None) -> ConfigDict:
     default_config = get_default_config()
     if modelfolder:
         config_path = Path(modelfolder + "/" + "config.yaml")
@@ -54,17 +58,17 @@ def get_config(filename: Optional[str] = None, modelfolder: Optional[str] = None
         return default_config
     else:
         print(f"Loading config from {config_path}")
-        with open(config_path, "r") as yamlFile:
-            configdict = yaml.safe_load(yamlFile)
+        with open(config_path) as yamlFile:
+            configdict: ConfigDict = yaml.safe_load(yamlFile)
             return configdict
 
 
-def get_device():
+def get_device() -> str:
     device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_built() or torch.backends.mps.is_available() else "cpu"
     if device == "cuda":
         print(f"Using NVIDIA GPU and device {device}")
-        print(f"Device name: {torch.cuda.get_device_name(device.index)}")
-        print(f"Device memory: {torch.cuda.get_device_properties(device.index).total_memory / 1024 ** 3} GB")
+        print(f"Device name: {torch.cuda.get_device_name(0)}")
+        print(f"Device memory: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3} GB")
     elif device == "mps":
         print(f"Using Apple Silicon and device {device}")
     else:
@@ -72,38 +76,38 @@ def get_device():
     return device
 
 
-def get_console_width():
+def get_console_width() -> int:
     try:
         # get the console window width
         with os.popen("stty size", "r") as console:
-            _, console_width = console.read().split()
-            console_width = int(console_width)
+            _, columns = console.read().split()
+            console_width = int(columns)
     except BaseException:
         # If we can't get the console width, use 80 as default
         console_width = 80
     return console_width
 
 
-def get_model_folder(config: dict):
+def get_model_folder(config: ConfigDict) -> str:
     if config["alt_model"]:
         return f"{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}_{config['alt_model']}"
     else:
         return f"{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}"
 
 
-def get_weights_file_path(config: dict, epoch: str):
+def get_weights_file_path(config: ConfigDict, epoch: str) -> str:
     model_folder = get_model_folder(config)
     model_filename = f"{config['model_basename']}{epoch}.pt"
     return str(Path(".") / model_folder / model_filename)
 
 
-def get_best_model_params_path(config: dict):
+def get_best_model_params_path(config: ConfigDict) -> str:
     model_folder = get_model_folder(config)
     model_filename = "best_model_params.pt"
     return str(Path(".") / model_folder / model_filename)
 
 
-def latest_weights_file_path(config: dict):
+def latest_weights_file_path(config: ConfigDict) -> str | None:
     model_folder = get_model_folder(config)
     model_filename = f"{config['model_basename']}*"
     weights_files = list(Path(model_folder).glob(model_filename))

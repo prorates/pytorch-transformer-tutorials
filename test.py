@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
-from config import get_config
-from config import get_device
-
+from config import get_config, get_device
 from tutorial1 import debug_code_model1
 from tutorial2 import debug_code_model2
 from tutorial3 import debug_code_model3

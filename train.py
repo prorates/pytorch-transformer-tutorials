@@ -1,24 +1,23 @@
 #!/usr/bin/env python3
-import sys
 import getopt
+import sys
 
 from config import get_config
-
 from tutorial1 import train_model1
 from tutorial2 import train_model2
 from tutorial3 import train_model3
 from tutorial4 import train_model4
 from tutorial5 import train_model5
 from tutorial6 import train_model6
-# from tutorial7 import train_model7
+from tutorial7 import train_model7
 from tutorial8 import train_model8
 
 
-def main(argv):
+def main(argv: list[str]) -> None:
     config_filename = None
     model_folder = None
     try:
-        opts, args = getopt.getopt(argv, "hc:m:", ["config=", "modelfolder="])
+        opts, _args = getopt.getopt(argv, "hc:m:", ["config=", "modelfolder="])
     except getopt.GetoptError:
         print("train.py -c <config_file> -m <model_folder>")
         sys.exit(2)
