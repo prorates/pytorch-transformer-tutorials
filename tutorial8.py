@@ -22,10 +22,10 @@ def build_model8(config: dict, vocab_tgt_len: int) -> Transformer8:
 
 
 def train_model8(config: dict):
-    # hyperparameters
-    max_iters = 5000
-    eval_interval = 100
-    eval_iters = 200
+    # hyperparameters (config-overridable; defaults preserve original behavior)
+    max_iters = config.get("max_iters", 5000)
+    eval_interval = config.get("eval_interval", 100)
+    eval_iters = config.get("eval_iters", 200)
     total_loss = 0
     initial_epoch = 0
     global_step = 0
