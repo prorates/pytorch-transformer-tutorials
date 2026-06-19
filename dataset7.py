@@ -7,6 +7,7 @@ import torch
 from torch import Tensor
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataset import IterableDataset
+from datasets import load_dataset
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
 from tokenizers.trainers import WordLevelTrainer
@@ -14,19 +15,22 @@ from tokenizers.pre_tokenizers import Whitespace
 from config import PAD, SOS, EOS, UNK
 from pathlib import Path
 
+# HuggingFace WikiText-2 (replaces the EOL torchtext WikiText2, whose prebuilt
+# extension is ABI-incompatible with modern torch). ``datasets`` is already a
+# project dependency. The "raw" config keeps original tokens (no <unk> folding).
+WIKITEXT2_PATH = "wikitext"
+WIKITEXT2_NAME = "wikitext-2-raw-v1"
 
-def _wikitext2():
-    """Lazily import torchtext's ``WikiText2``.
 
-    torchtext is EOL and its prebuilt extension is ABI-incompatible with newer
-    torch, so importing it at module load would break the whole inference CLI
-    (``translate.py`` imports ``tutorial7`` -> ``dataset7``). Defer the import to
-    call time so only model7 pays the cost. See ``openspec/ideas.md`` (torchtext
-    decision: guard now, replace WikiText2 with HuggingFace ``datasets`` later).
+def _wikitext2(split: str) -> list[str]:
+    """Return a WikiText-2 split as a list of text lines via HuggingFace datasets.
+
+    torchtext's ``WikiText2`` is gone; ``load_dataset`` yields rows with a "text"
+    field, matching the string-iterable the tokenizer trainer and ``Dataset7``
+    expect. HuggingFace split names: train / validation / test.
     """
-    from torchtext.datasets import WikiText2
-
-    return WikiText2
+    ds = load_dataset(WIKITEXT2_PATH, WIKITEXT2_NAME, split=split)
+    return ds["text"]
 
 
 class Dataset7(Dataset):
@@ -107,7 +111,7 @@ class Dataset7(Dataset):
 def get_or_build_tokenizer7(config: dict, model_folder: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format("en") + ".json")
     if not Path.exists(tokenizer_path):
-        train_iter = _wikitext2()(split="train")
+        train_iter = _wikitext2("train")
         tokenizer = Tokenizer(WordLevel(unk_token=UNK))
         tokenizer.pre_tokenizer = Whitespace()
         trainer = WordLevelTrainer(special_tokens=[UNK, PAD, SOS, EOS], min_frequency=2)
@@ -134,7 +138,9 @@ def get_ds7(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Da
 
     # ``train_iter`` was "consumed" by the process of building the vocab,
     # so we have to create it again
-    train_iter, val_iter, test_iter = _wikitext2()()
+    train_iter = _wikitext2("train")
+    val_iter = _wikitext2("validation")
+    test_iter = _wikitext2("test")
     train_data = Dataset7(train_iter, tokenizer=tokenizer, bsz=20, bptt=35)
     val_data = Dataset7(val_iter, tokenizer=tokenizer, bsz=10, bptt=35)
     test_data = Dataset7(test_iter, tokenizer=tokenizer, bsz=10, bptt=35)
@@ -150,7 +156,7 @@ def get_ds7(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Da
 
 
 def local_testing():
-    vocab_iter = _wikitext2()(split="train")
+    vocab_iter = _wikitext2("train")
     tokenizer = Tokenizer(WordLevel(unk_token=UNK))
     tokenizer.pre_tokenizer = Whitespace()
     trainer = WordLevelTrainer(special_tokens=[UNK, PAD, SOS, EOS], min_frequency=2)
@@ -159,7 +165,7 @@ def local_testing():
     # ``train_iter`` was "consumed" by the process of building the vocab,
     # so we have to create it again
     bptt = 35
-    train_iter = _wikitext2()(split="train")
+    train_iter = _wikitext2("train")
     train_ds = Dataset7(train_iter, tokenizer, bsz=20, bptt=35)
     train_data = train_ds.batchified_data
 
