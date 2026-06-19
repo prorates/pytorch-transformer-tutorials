@@ -29,6 +29,7 @@ module = [
     "datasets.*",
     "tokenizers.*",
     "torchtext.*",
+    "tqdm.*",
     "yaml",
 ]
 ignore_missing_imports = true

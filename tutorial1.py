@@ -1,22 +1,23 @@
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 # This is based on the following [video](https://youtu.be/ISNdQcPhsts)
 # The code is original code is available [here](https://github.com/hkproj/pytorch-transformer)
-
 import torch
 import torch.nn as nn
 from tokenizers import Tokenizer
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm import tqdm
 
-from config import EOS, PAD, SOS, get_console_width, get_device, get_model_folder, get_config
+from config import EOS, PAD, SOS, ConfigDict, get_config, get_console_width, get_device, get_model_folder
 from dataset1 import get_ds1, get_testing_ds1
 from model1 import Transformer1, build_transformer1
-from utils import collect_training_metrics, reload_model, save_model, load_trained_model
+from utils import collect_training_metrics, load_trained_model, reload_model, save_model
 
 
-def build_model1(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer1:
+def build_model1(config: ConfigDict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer1:
     model = build_transformer1(
         vocab_src_len,
         vocab_tgt_len,
@@ -33,16 +34,16 @@ def build_model1(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transf
 
 def evaluate_model1(
     model: Transformer1,
-    validation_ds: DataLoader,
+    validation_ds: DataLoader[Any],
     tokenizer_src: Tokenizer,
     tokenizer_tgt: Tokenizer,
     max_len: int,
-    device,
-    print_msg,
+    device: str,
+    print_msg: Callable[[str], None],
     global_step: int,
-    writer,
+    writer: SummaryWriter | None,
     num_examples: int = 2,
-):
+) -> None:
     model.eval()
     count = 0
 
@@ -66,7 +67,10 @@ def evaluate_model1(
             # encoder_input has shape (bs=1, SeqLen)
             # encoder_mask has shape (bs=1, 1, 1, SeqLen)
             # model_out has shape (SeqLen)
-            model_out = model.greedy_decode(encoder_input, encoder_mask, sos_idx, eos_idx, max_len, device)
+            # NOTE: greedy_decode's signature is (..., eos_idx, sos_idx, ...); pass in that
+            # order (translate1 already does). The previous (sos_idx, eos_idx) was swapped,
+            # which seeded the decoder with EOS and stopped on SOS.
+            model_out = model.greedy_decode(encoder_input, encoder_mask, eos_idx, sos_idx, max_len, device)
 
             source_text = batch["src_text"][0]
             target_text = batch["tgt_text"][0]
@@ -89,7 +93,7 @@ def evaluate_model1(
         collect_training_metrics(writer, predicted, expected, global_step)
 
 
-def train_model1(config: dict):
+def train_model1(config: ConfigDict) -> None:
     device = get_device()
 
     model_folder = get_model_folder(config)
@@ -150,7 +154,7 @@ def train_model1(config: dict):
                 batch_iterator.write("-" * console_width)
                 batch_iterator.write(f"{'Source: ':>15}{batch['src_text'][0]}")
                 batch_iterator.write(f"{'Target: ':>15}{batch['tgt_text'][0]}")
-                kn_sentence_predicted = torch.argmax(proj_output[0], axis=1)
+                kn_sentence_predicted = torch.argmax(proj_output[0], dim=1)
                 # JEB: Figure out how to get decode to stop at eos
                 # predicted_sentence = tokenizer_tgt.decode(kn_sentence_predicted.detach().cpu().numpy(), skip_special_tokens=True)
                 predicted_words = []
@@ -170,14 +174,14 @@ def train_model1(config: dict):
 
         # Run validation at the end of each epoch
         evaluate_model1(
-            model, val_dataloader, tokenizer_src, tokenizer_tgt, config["seq_len"], device, lambda msg: batch_iterator.write(msg), global_step, writer
+            model, val_dataloader, tokenizer_src, tokenizer_tgt, config["seq_len"], device, batch_iterator.write, global_step, writer
         )
 
         # Save the model at the end of every epoch
         save_model(config, model, optimizer, epoch, global_step)
 
 
-def translate1(config: dict, sentence: str):
+def translate1(config: ConfigDict, sentence: str) -> str:
     device = get_device()
 
     model_folder = get_model_folder(config)
@@ -235,7 +239,7 @@ def translate1(config: dict, sentence: str):
     return model_out_text
 
 
-def debug_code_model1(config: dict, device):
+def debug_code_model1(config: ConfigDict, device: str) -> None:
     config["model"] = "model1"
     config["datasource"] = "opus_books"
     config["lang_src"] = "en"
@@ -244,8 +248,8 @@ def debug_code_model1(config: dict, device):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
-    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
+    # Smoke-test the data pipeline; the debug model below uses fixed vocab sizes.
+    _ = get_ds1(config, model_folder)
     model = build_model1(config, 500, 500).to(device)
 
     print(model)

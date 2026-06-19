@@ -33,9 +33,9 @@ def collect_training_metrics(writer: Any, predicted: list[str], expected: list[s
         writer.flush()
 
 
-def reload_model(
-    config: ConfigDict, model: nn.Module, optimizer: Optimizer, initial_epoch: int, global_step: int
-) -> tuple[nn.Module, int, Optimizer, int]:
+def reload_model[ModelT: nn.Module, OptimT: Optimizer](
+    config: ConfigDict, model: ModelT, optimizer: OptimT, initial_epoch: int, global_step: int
+) -> tuple[ModelT, int, OptimT, int]:
     preload = config["preload"]
     model_filename = latest_weights_file_path(config) if preload == "latest" else get_weights_file_path(config, preload) if preload else None
     if model_filename:
@@ -65,7 +65,7 @@ def save_model(config: ConfigDict, model: nn.Module, optimizer: Optimizer, epoch
         )
 
 
-def load_trained_model(config: ConfigDict, model: nn.Module) -> nn.Module:
+def load_trained_model[ModelT: nn.Module](config: ConfigDict, model: ModelT) -> ModelT:
     preload = config["preload"]
     model_filename = latest_weights_file_path(config) if preload == "latest" else get_weights_file_path(config, preload) if preload else None
     print(f"Preloading model {model_filename}")
