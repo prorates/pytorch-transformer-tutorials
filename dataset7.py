@@ -1,19 +1,19 @@
 # See [Huggineface Transformer Tutorial](https://pytorch.org/tutorials/beginner/transformer_tutorial.html)
 
-import math
-from typing import Tuple
+from collections.abc import Iterable
+from pathlib import Path
+from typing import Any
 
 import torch
-from torch import Tensor
-from torch.utils.data import Dataset, DataLoader
-from torch.utils.data.dataset import IterableDataset
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
-from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
-from config import PAD, SOS, EOS, UNK
-from pathlib import Path
+from tokenizers.trainers import WordLevelTrainer
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset
+
+from config import EOS, PAD, SOS, UNK, ConfigDict
 
 # HuggingFace WikiText-2 (replaces the EOL torchtext WikiText2, whose prebuilt
 # extension is ABI-incompatible with modern torch). ``datasets`` is already a
@@ -33,9 +33,9 @@ def _wikitext2(split: str) -> list[str]:
     return ds["text"]
 
 
-class Dataset7(Dataset):
+class Dataset7(Dataset[Any]):
 
-    def __init__(self, raw_text_iter: IterableDataset, tokenizer: Tokenizer, bsz: int, bptt: int) -> None:
+    def __init__(self, raw_text_iter: Iterable[str], tokenizer: Tokenizer, bsz: int, bptt: int) -> None:
         super().__init__()
 
         # self.tokenizer: Tokenizer = tokenizer
@@ -46,7 +46,7 @@ class Dataset7(Dataset):
         self.batchified_data: Tensor = self.batchify(self.processed_data, bsz)
         self.bptt = bptt
 
-    def data_process(self, raw_text_iter: IterableDataset, tokenizer: Tokenizer):
+    def data_process(self, raw_text_iter: Iterable[str], tokenizer: Tokenizer) -> Tensor:
         """Converts raw text into a flat Tensor."""
         data = [torch.tensor(tokenizer.encode(item).ids, dtype=torch.long) for item in raw_text_iter]
         return torch.cat(tuple(filter(lambda t: t.numel() > 0, data)))
@@ -72,10 +72,10 @@ class Dataset7(Dataset):
         # return data.to(device)
         return batchified_data
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.batchified_data)
 
-    def get_batch(self, i: int) -> Tuple[Tensor, Tensor]:
+    def get_batch(self, i: int) -> tuple[Tensor, Tensor]:
         """
         Args:
             source: Tensor, shape ``[full_seq_len, batch_size]``
@@ -97,7 +97,7 @@ class Dataset7(Dataset):
         target = self.batchified_data[i + 1 : i + 1 + seq_len].reshape(-1)
         return data, target
 
-    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
         # JEB: This is a hack. The data is already organized in columns/batch.
         # JEB: The current batch size passed to the dataloader is set to 1
         # JEB: Seems that the batck size passed to the dataloader is in fact bptt
@@ -108,7 +108,7 @@ class Dataset7(Dataset):
         return self.get_batch(idx)
 
 
-def get_or_build_tokenizer7(config: dict, model_folder: str) -> Tokenizer:
+def get_or_build_tokenizer7(config: ConfigDict, model_folder: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format("en") + ".json")
     if not Path.exists(tokenizer_path):
         train_iter = _wikitext2("train")
@@ -122,7 +122,7 @@ def get_or_build_tokenizer7(config: dict, model_folder: str) -> Tokenizer:
     return tokenizer
 
 
-def get_tokenizer7(config: dict, model_folder: str) -> Tokenizer:
+def get_tokenizer7(config: ConfigDict, model_folder: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format("en") + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
@@ -132,7 +132,7 @@ def get_tokenizer7(config: dict, model_folder: str) -> Tokenizer:
     return tokenizer
 
 
-def get_ds7(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, DataLoader, Tokenizer]:
+def get_ds7(config: ConfigDict, model_folder: str) -> tuple[DataLoader[Any], DataLoader[Any], DataLoader[Any], Tokenizer]:
 
     tokenizer = get_or_build_tokenizer7(config, model_folder)
 
@@ -155,7 +155,7 @@ def get_ds7(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Da
     return train_dataloader, val_dataloader, test_dataloader, tokenizer
 
 
-def local_testing():
+def local_testing() -> None:
     vocab_iter = _wikitext2("train")
     tokenizer = Tokenizer(WordLevel(unk_token=UNK))
     tokenizer.pre_tokenizer = Whitespace()
@@ -169,8 +169,7 @@ def local_testing():
     train_ds = Dataset7(train_iter, tokenizer, bsz=20, bptt=35)
     train_data = train_ds.batchified_data
 
-    num_batches = len(train_data) // bptt
-    for batch, i in enumerate(range(0, train_data.size(0) - 1, bptt)):
+    for i in range(0, train_data.size(0) - 1, bptt):
         data, targets = train_ds.get_batch(i)
         print(".................")
         print(data.shape)

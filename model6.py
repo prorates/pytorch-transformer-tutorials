@@ -1,18 +1,17 @@
 # This is based on the following [video](https://www.youtube.com/playlist?list=PLTl9hO2Oobd97qfWC40gOSU8C0iu0m2l4)
 # The code is original code is available [here](https://github.com/ajhalthor/Transformer-Neural-Network)
 
-import numpy as np
-import torch
 import math
-from torch import nn
+
+import torch
 import torch.nn.functional as F
-from torch import Tensor
+from torch import Tensor, nn
 
+from config import EOS, PAD, SOS, get_device
 from dataset6 import Dataset6
-from config import SOS, EOS, PAD, UNK, get_device
 
 
-def scaled_dot_product(q: Tensor, k: Tensor, v: Tensor, mask: Tensor = None):
+def scaled_dot_product(q: Tensor, k: Tensor, v: Tensor, mask: Tensor | None = None) -> tuple[Tensor, Tensor]:
     d_k = q.size()[-1]
     scaled = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(d_k)
     if mask is not None:
@@ -24,7 +23,7 @@ def scaled_dot_product(q: Tensor, k: Tensor, v: Tensor, mask: Tensor = None):
 
 
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, max_sequence_length: int):
+    def __init__(self, d_model: int, max_sequence_length: int) -> None:
         super().__init__()
         self.max_sequence_length: int = max_sequence_length
         self.d_model: int = d_model
@@ -43,19 +42,27 @@ class PositionalEncoding(nn.Module):
 class SentenceEmbedding(nn.Module):
     "For a given sentence, create an embedding"
 
-    def __init__(self, max_sequence_length: int, d_model: int, language_to_index: int, START_TOKEN: int, END_TOKEN: int, PADDING_TOKEN: int):
+    def __init__(
+        self,
+        max_sequence_length: int,
+        d_model: int,
+        language_to_index: dict[str, int],
+        START_TOKEN: str,
+        END_TOKEN: str,
+        PADDING_TOKEN: str,
+    ) -> None:
         super().__init__()
         self.vocab_size: int = len(language_to_index)
         self.max_sequence_length: int = max_sequence_length
         self.embedding: nn.Embedding = nn.Embedding(self.vocab_size, d_model)
-        self.language_to_index: int = language_to_index
+        self.language_to_index: dict[str, int] = language_to_index
         self.position_encoder: PositionalEncoding = PositionalEncoding(d_model, max_sequence_length)
         self.dropout: nn.Dropout = nn.Dropout(p=0.1)
-        self.START_TOKEN: int = START_TOKEN
-        self.END_TOKEN: int = END_TOKEN
-        self.PADDING_TOKEN: int = PADDING_TOKEN
+        self.START_TOKEN: str = START_TOKEN
+        self.END_TOKEN: str = END_TOKEN
+        self.PADDING_TOKEN: str = PADDING_TOKEN
 
-    def batch_tokenize(self, batched_sentences: tuple[str], start_token: bool, end_token: bool):
+    def batch_tokenize(self, batched_sentences: tuple[str, ...], start_token: bool, end_token: bool) -> Tensor:
 
         def tokenize(sentence: str, start_token: bool, end_token: bool) -> Tensor:
             # JEB: This tokenize function assumes that each caractere is a token.
@@ -76,7 +83,7 @@ class SentenceEmbedding(nn.Module):
         return tokenized.to(get_device())
 
     # fowards returns a (bs, SeqLen, d_model) tensor
-    def forward(self, batched_sentences: tuple[str], start_token: bool, end_token: bool) -> Tensor:  # sentence
+    def forward(self, batched_sentences: tuple[str, ...], start_token: bool, end_token: bool) -> Tensor:  # sentence
         x = self.batch_tokenize(batched_sentences, start_token, end_token)
         x = self.embedding(x)
         pos = self.position_encoder().to(get_device())
@@ -85,7 +92,7 @@ class SentenceEmbedding(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model: int, num_heads: int):
+    def __init__(self, d_model: int, num_heads: int) -> None:
         super().__init__()
         self.d_model: int = d_model
         self.num_heads: int = num_heads
@@ -94,20 +101,20 @@ class MultiHeadAttention(nn.Module):
         self.linear_layer = nn.Linear(d_model, d_model)
 
     # fowards returns a (bs, SeqLen, d_model) tensor
-    def forward(self, x, mask) -> Tensor:
-        batch_size, sequence_length, d_model = x.size()
+    def forward(self, x: Tensor, mask: Tensor | None) -> Tensor:
+        batch_size, sequence_length, _d_model = x.size()
         qkv = self.qkv_layer(x)
         qkv = qkv.reshape(batch_size, sequence_length, self.num_heads, 3 * self.head_dim)
         qkv = qkv.permute(0, 2, 1, 3)
         q, k, v = qkv.chunk(3, dim=-1)
-        values, attention = scaled_dot_product(q, k, v, mask)
+        values, _attention = scaled_dot_product(q, k, v, mask)
         values = values.permute(0, 2, 1, 3).reshape(batch_size, sequence_length, self.num_heads * self.head_dim)
         out = self.linear_layer(values)  # (bs, SeqLen, d_model)
         return out
 
 
 class LayerNormalization(nn.Module):
-    def __init__(self, parameters_shape, eps=1e-5):
+    def __init__(self, parameters_shape: list[int], eps: float = 1e-5) -> None:
         super().__init__()
         # JEB: Neeed to study. Look like a list with value[d_model]
         self.parameters_shape = parameters_shape
@@ -129,8 +136,8 @@ class LayerNormalization(nn.Module):
 
 
 class PositionwiseFeedForward(nn.Module):
-    def __init__(self, d_model: int, hidden: int, drop_prob: float = 0.1):
-        super(PositionwiseFeedForward, self).__init__()
+    def __init__(self, d_model: int, hidden: int, drop_prob: float = 0.1) -> None:
+        super().__init__()
         self.linear1 = nn.Linear(d_model, hidden)
         self.linear2 = nn.Linear(hidden, d_model)
         self.relu = nn.ReLU()
@@ -147,8 +154,8 @@ class PositionwiseFeedForward(nn.Module):
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, d_model: int, ffn_hidden: int, num_heads: int, drop_prob: float):
-        super(EncoderLayer, self).__init__()
+    def __init__(self, d_model: int, ffn_hidden: int, num_heads: int, drop_prob: float) -> None:
+        super().__init__()
         self.attention = MultiHeadAttention(d_model=d_model, num_heads=num_heads)
         self.norm1 = LayerNormalization(parameters_shape=[d_model])
         self.dropout1 = nn.Dropout(p=drop_prob)
@@ -175,7 +182,7 @@ class SequentialEncoder(nn.Sequential):
     # SequentialEncoder is instantiate with a list of EncoderLayer
 
     # foward returns a (bs, SeqLen, d_model) tensor
-    def forward(self, *inputs) -> Tensor:
+    def forward(self, *inputs: Tensor) -> Tensor:
         x, self_attention_mask = inputs
         for module in self._modules.values():
             x = module(x, self_attention_mask)
@@ -188,20 +195,20 @@ class Encoder(nn.Module):
         d_model: int,
         ffn_hidden: int,
         num_heads: int,
-        drop_prob,
+        drop_prob: float,
         num_layers: int,
         max_sequence_length: int,
-        language_to_index: dict,
-        START_TOKEN: int,
-        END_TOKEN: int,
-        PADDING_TOKEN: int,
-    ):
+        language_to_index: dict[str, int],
+        START_TOKEN: str,
+        END_TOKEN: str,
+        PADDING_TOKEN: str,
+    ) -> None:
         super().__init__()
         self.sentence_embedding = SentenceEmbedding(max_sequence_length, d_model, language_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN)
         self.layers = SequentialEncoder(*[EncoderLayer(d_model, ffn_hidden, num_heads, drop_prob) for _ in range(num_layers)])
 
     # forward returns a (bs, SeqLen, d_model) Tensor
-    def forward(self, encoder_batched_sentences: tuple[str], self_attention_mask: Tensor, start_token: bool, end_token: bool) -> Tensor:
+    def forward(self, encoder_batched_sentences: tuple[str, ...], self_attention_mask: Tensor, start_token: bool, end_token: bool) -> Tensor:
         # attention_mask shape is (bs, SeqLen, SeqLen)
         x = self.sentence_embedding(encoder_batched_sentences, start_token, end_token)  # (bs, SeqLen, d_model)
         x = self.layers(x, self_attention_mask)  # (bs, SeqLen, d_model)
@@ -209,7 +216,7 @@ class Encoder(nn.Module):
 
 
 class MultiHeadCrossAttention(nn.Module):
-    def __init__(self, d_model: int, num_heads: int):
+    def __init__(self, d_model: int, num_heads: int) -> None:
         super().__init__()
         self.d_model = d_model
         self.num_heads = num_heads
@@ -233,15 +240,15 @@ class MultiHeadCrossAttention(nn.Module):
         q = q.permute(0, 2, 1, 3)
         k, v = kv.chunk(2, dim=-1)
         # We don't need the mask for cross attention, removing in outer function!
-        values, attention = scaled_dot_product(q, k, v, mask)
+        values, _attention = scaled_dot_product(q, k, v, mask)
         values = values.permute(0, 2, 1, 3).reshape(batch_size, sequence_length, d_model)
         out = self.linear_layer(values)
         return out
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self, d_model: int, ffn_hidden: int, num_heads: int, drop_prob: float):
-        super(DecoderLayer, self).__init__()
+    def __init__(self, d_model: int, ffn_hidden: int, num_heads: int, drop_prob: float) -> None:
+        super().__init__()
         self.self_attention = MultiHeadAttention(d_model=d_model, num_heads=num_heads)
         self.layer_norm1 = LayerNormalization(parameters_shape=[d_model])
         self.dropout1 = nn.Dropout(p=drop_prob)
@@ -281,7 +288,7 @@ class SequentialDecoder(nn.Sequential):
     # SequentialDecoder is instantiate with a list of DecoderLayer
 
     # foward returns a (bs, SeqLen, d_model) tensor
-    def forward(self, *inputs) -> Tensor:
+    def forward(self, *inputs: Tensor) -> Tensor:
         encoder_out, y, self_attention_mask, cross_attention_mask = inputs
         for module in self._modules.values():
             y = module(encoder_out, y, self_attention_mask, cross_attention_mask)
@@ -294,14 +301,14 @@ class Decoder(nn.Module):
         d_model: int,
         ffn_hidden: int,
         num_heads: int,
-        drop_prob,
+        drop_prob: float,
         num_layers: int,
         max_sequence_length: int,
-        language_to_index: dict,
-        START_TOKEN: int,
-        END_TOKEN: int,
-        PADDING_TOKEN: int,
-    ):
+        language_to_index: dict[str, int],
+        START_TOKEN: str,
+        END_TOKEN: str,
+        PADDING_TOKEN: str,
+    ) -> None:
         super().__init__()
         self.sentence_embedding = SentenceEmbedding(max_sequence_length, d_model, language_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN)
         self.layers = SequentialDecoder(*[DecoderLayer(d_model, ffn_hidden, num_heads, drop_prob) for _ in range(num_layers)])
@@ -310,7 +317,7 @@ class Decoder(nn.Module):
     def forward(
         self,
         encoder_out: Tensor,
-        decoder_batched_sentences: tuple[str],
+        decoder_batched_sentences: tuple[str, ...],
         self_attention_mask: Tensor,
         cross_attention_mask: Tensor,
         start_token: bool,
@@ -332,16 +339,16 @@ class Transformer6(nn.Module):
         d_model: int,
         ffn_hidden: int,
         num_heads: int,
-        drop_prob,
+        drop_prob: float,
         num_layers: int,
         max_sequence_length: int,
         kn_vocab_size: int,
-        english_to_index: dict,
-        kannada_to_index: dict,
-        START_TOKEN: int,
-        END_TOKEN: int,
-        PADDING_TOKEN: int,
-    ):
+        english_to_index: dict[str, int],
+        kannada_to_index: dict[str, int],
+        START_TOKEN: str,
+        END_TOKEN: str,
+        PADDING_TOKEN: str,
+    ) -> None:
         super().__init__()
         self.encoder = Encoder(
             d_model, ffn_hidden, num_heads, drop_prob, num_layers, max_sequence_length, english_to_index, START_TOKEN, END_TOKEN, PADDING_TOKEN
@@ -355,11 +362,11 @@ class Transformer6(nn.Module):
     # forward returns a (bs, SeqLen, vocab_size) Tensor
     def forward(
         self,
-        encoder_batched_sentences: tuple[str],
-        decoder_batched_sentences: tuple[str],
-        encoder_self_attention_mask: Tensor = None,
-        decoder_self_attention_mask: Tensor = None,
-        decoder_cross_attention_mask: Tensor = None,
+        encoder_batched_sentences: tuple[str, ...],
+        decoder_batched_sentences: tuple[str, ...],
+        encoder_self_attention_mask: Tensor | None = None,
+        decoder_self_attention_mask: Tensor | None = None,
+        decoder_cross_attention_mask: Tensor | None = None,
         enc_start_token: bool = False,
         enc_end_token: bool = False,
         dec_start_token: bool = False,  # JEB: ? We should make this true
@@ -381,9 +388,9 @@ class Transformer6(nn.Module):
         decoder_out = self.linear(decoder_out)  # (bs, SeqLen, vocab_size)
         return decoder_out
 
-    def greedy_decode(self, src_batched_sentences: tuple[str], max_len: int, index_to_tgt: dict, device) -> Tensor:
+    def greedy_decode(self, src_batched_sentences: tuple[str, ...], max_len: int, index_to_tgt: dict[int, str], device: str) -> tuple[str, ...]:
 
-        predicated_batched_sentences = ("",)  # tuple[str]
+        predicated_batched_sentences: tuple[str, ...] = ("",)
         for word_counter in range(max_len):
             encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
                 src_batched_sentences, predicated_batched_sentences, max_len
@@ -401,7 +408,7 @@ class Transformer6(nn.Module):
             )  # During training, model6 DOES add eos to decoder input
 
             next_token_prob_distribution = predictions[0][word_counter]  # not actual probs
-            next_token_index = torch.argmax(next_token_prob_distribution).item()
+            next_token_index = int(torch.argmax(next_token_prob_distribution).item())
             next_token = index_to_tgt[next_token_index]
             if next_token == EOS:
                 break
@@ -413,8 +420,8 @@ class Transformer6(nn.Module):
 def build_transformer6(
     src_vocab_size: int,
     tgt_vocab_size: int,
-    src_to_index: dict,
-    tgt_to_index: dict,
+    src_to_index: dict[str, int],
+    tgt_to_index: dict[str, int],
     src_seq_len: int,
     tgt_seq_len: int,
     d_model: int = 512,

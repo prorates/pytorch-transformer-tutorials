@@ -1,17 +1,16 @@
 # The code was copy pasted from [here](https://towardsdatascience.com/build-your-own-transformer-from-scratch-using-pytorch-84c850470dcb)
 # The same code seems available [here](https://www.datacamp.com/tutorial/building-a-transformer-with-py-torch)
 
+import math
+
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.utils.data as data
 from torch import Tensor
-import math
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, d_model: int, num_heads: int):
-        super(MultiHeadAttention, self).__init__()
+    def __init__(self, d_model: int, num_heads: int) -> None:
+        super().__init__()
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
 
         self.d_model = d_model
@@ -23,7 +22,7 @@ class MultiHeadAttention(nn.Module):
         self.W_v = nn.Linear(d_model, d_model)
         self.W_o = nn.Linear(d_model, d_model)
 
-    def scaled_dot_product_attention(self, Q, K, V, mask=None):
+    def scaled_dot_product_attention(self, Q: Tensor, K: Tensor, V: Tensor, mask: Tensor | None = None) -> Tensor:
         # (Batch, h, Seq_Len, d_k) --> (Batch, h, Seq_Len, Seq_Len)
         # we transpose the last two dimension. key is ...Seq_Len, d_k so it becomes...d_k, Seq_Len
         attn_scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
@@ -40,15 +39,15 @@ class MultiHeadAttention(nn.Module):
         output = torch.matmul(attn_probs, V)
         return output
 
-    def split_heads(self, x):
-        batch_size, seq_length, d_model = x.size()
+    def split_heads(self, x: Tensor) -> Tensor:
+        batch_size, seq_length, _d_model = x.size()
         return x.view(batch_size, seq_length, self.num_heads, self.d_k).transpose(1, 2)
 
-    def combine_heads(self, x):
-        batch_size, num_heads, seq_length, d_k = x.size()
+    def combine_heads(self, x: Tensor) -> Tensor:
+        batch_size, _num_heads, seq_length, _d_k = x.size()
         return x.transpose(1, 2).contiguous().view(batch_size, seq_length, self.d_model)
 
-    def forward(self, Q, K, V, mask=None):
+    def forward(self, Q: Tensor, K: Tensor, V: Tensor, mask: Tensor | None = None) -> Tensor:
         Q = self.split_heads(self.W_q(Q))
         K = self.split_heads(self.W_k(K))
         V = self.split_heads(self.W_v(V))
@@ -63,13 +62,13 @@ class MultiHeadAttention(nn.Module):
 
 
 class PositionWiseFeedForward(nn.Module):
-    def __init__(self, d_model: int, d_ff: int):
-        super(PositionWiseFeedForward, self).__init__()
+    def __init__(self, d_model: int, d_ff: int) -> None:
+        super().__init__()
         self.fc1 = nn.Linear(d_model, d_ff)
         self.fc2 = nn.Linear(d_ff, d_model)
         self.relu = nn.ReLU()
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         return self.fc2(self.relu(self.fc1(x)))
 
 
@@ -77,8 +76,8 @@ class PositionWiseFeedForward(nn.Module):
 # JEB: Compare to PosistionalEncoding at line 68 in model.py
 # JEB: The members of the init function have the exact same name as model.py
 class PositionalEncoding(nn.Module):
-    def __init__(self, d_model: int, max_seq_length: int):
-        super(PositionalEncoding, self).__init__()
+    def __init__(self, d_model: int, max_seq_length: int) -> None:
+        super().__init__()
 
         pe = torch.zeros(max_seq_length, d_model)  # (SeqLen, d_model)
         position = torch.arange(0, max_seq_length, dtype=torch.float).unsqueeze(1)
@@ -90,22 +89,22 @@ class PositionalEncoding(nn.Module):
         # JEB: Looks like everybody is copy pasting the behavior
         self.register_buffer("pe", pe.unsqueeze(0))
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         # JEB: The dimmension of the pe function are different
         # the requires_grad(False) is not activated
         return x + self.pe[:, : x.size(1)]
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, d_model: int, num_heads: int, d_ff, dropout):
-        super(EncoderLayer, self).__init__()
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float) -> None:
+        super().__init__()
         self.self_attn = MultiHeadAttention(d_model, num_heads)
         self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, mask):
+    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
         attn_output = self.self_attn(x, x, x, mask)
         x = self.norm1(x + self.dropout(attn_output))
         ff_output = self.feed_forward(x)
@@ -117,8 +116,8 @@ class EncoderLayer(nn.Module):
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float):
-        super(DecoderLayer, self).__init__()
+    def __init__(self, d_model: int, num_heads: int, d_ff: int, dropout: float) -> None:
+        super().__init__()
         self.self_attn = MultiHeadAttention(d_model, num_heads)
         self.cross_attn = MultiHeadAttention(d_model, num_heads)
         self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
@@ -128,7 +127,7 @@ class DecoderLayer(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     # JEB: The signature is identical to line 231 of the model.py
-    def forward(self, x, enc_output, src_mask, tgt_mask):
+    def forward(self, x: Tensor, enc_output: Tensor, src_mask: Tensor, tgt_mask: Tensor) -> Tensor:
         # this invokes the forward function of the MultiHeadAttention
         attn_output = self.self_attn(x, x, x, tgt_mask)
         x = self.norm1(x + self.dropout(attn_output))
@@ -142,8 +141,18 @@ class DecoderLayer(nn.Module):
 
 
 class Transformer2(nn.Module):
-    def __init__(self, src_vocab_size: int, tgt_vocab_size: int, d_model: int, num_heads: int, num_layers: int, d_ff, max_seq_length: int, dropout):
-        super(Transformer2, self).__init__()
+    def __init__(
+        self,
+        src_vocab_size: int,
+        tgt_vocab_size: int,
+        d_model: int,
+        num_heads: int,
+        num_layers: int,
+        d_ff: int,
+        max_seq_length: int,
+        dropout: float,
+    ) -> None:
+        super().__init__()
         self.encoder_embedding = nn.Embedding(src_vocab_size, d_model)
         self.decoder_embedding = nn.Embedding(tgt_vocab_size, d_model)
         self.positional_encoding = PositionalEncoding(d_model, max_seq_length)
@@ -154,7 +163,7 @@ class Transformer2(nn.Module):
         self.fc = nn.Linear(d_model, tgt_vocab_size)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, src: Tensor, tgt: Tensor, src_mask: Tensor, tgt_mask: Tensor):
+    def forward(self, src: Tensor, tgt: Tensor, src_mask: Tensor, tgt_mask: Tensor) -> Tensor:
         src_embedded = self.dropout(self.positional_encoding(self.encoder_embedding(src)))
         tgt_embedded = self.dropout(self.positional_encoding(self.decoder_embedding(tgt)))
 

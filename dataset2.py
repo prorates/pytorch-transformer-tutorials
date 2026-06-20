@@ -1,26 +1,23 @@
 # The code was copy pasted from [here](https://towardsdatascience.com/build-your-own-transformer-from-scratch-using-pytorch-84c850470dcb)
 # The same code seems available [here](https://www.datacamp.com/tutorial/building-a-transformer-with-py-torch)
 
-import torch
-from torch import Tensor
-from torch.utils.data import Dataset, DataLoader, random_split
-from torch.autograd import Variable
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
-import numpy as np
 
-from typing import Tuple
-
+import torch
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
-from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.trainers import WordLevelTrainer
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset, random_split
 
-from pathlib import Path
-from config import EOS, SOS, PAD, UNK
+from config import EOS, PAD, SOS, UNK, ConfigDict
 
 
-def get_ds2_old(config: dict, model_folder: str, device) -> Tuple[Tensor, Tensor, int, int]:
+def get_ds2_old(config: ConfigDict, model_folder: str, device: str) -> tuple[Tensor, Tensor, int, int]:
     # Generate random sample data
     # THis model2 does not care about language itself. Only generates random tokens
     fake_src_vocab_size = 500
@@ -34,9 +31,9 @@ def get_ds2_old(config: dict, model_folder: str, device) -> Tuple[Tensor, Tensor
     return src_data, tgt_data, fake_src_vocab_size, fake_tgt_vocab_size
 
 
-class Dataset2(Dataset):
+class Dataset2(Dataset[Any]):
 
-    def __init__(self, ds, t_src: Tokenizer, t_tgt: Tokenizer, src_lang: str, tgt_lang: str, seq_len: int) -> None:
+    def __init__(self, ds: Any, t_src: Tokenizer, t_tgt: Tokenizer, src_lang: str, tgt_lang: str, seq_len: int) -> None:
         super().__init__()
 
         self.ds = ds
@@ -50,7 +47,7 @@ class Dataset2(Dataset):
         self.eos_token = torch.tensor([t_tgt.token_to_id(EOS)], dtype=torch.int64)
         self.pad_token = torch.tensor([t_tgt.token_to_id(PAD)], dtype=torch.int64)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.ds)
 
     def __getitem__(self, idx: Any) -> Any:
@@ -127,26 +124,26 @@ class Dataset2(Dataset):
             "tgt_text": tgt_text,
         }
 
-    def generate_mask(self, src, tgt):
+    def generate_mask(self, src: Tensor, tgt: Tensor) -> tuple[Tensor, Tensor]:
         # src_mask = (src != 0).unsqueeze(1).unsqueeze(2)
         # tgt_mask = (tgt != 0).unsqueeze(1).unsqueeze(3)
         src_mask = (src != self.pad_token).unsqueeze(-2)
         tgt_mask = (tgt != self.pad_token).unsqueeze(-2)
-        seq_length = tgt.size(0)
-        nopeak_mask = (1 - torch.triu(torch.ones(1, seq_length, seq_length), diagonal=1)).bool()
         # One more time issue with the nopeak_mask
+        # seq_length = tgt.size(0)
+        # nopeak_mask = (1 - torch.triu(torch.ones(1, seq_length, seq_length), diagonal=1)).bool()
         # tgt_mask = tgt_mask & nopeak_mask
         return src_mask, tgt_mask
 
 
-def get_all_sentences2(ds, lang):
+def get_all_sentences2(ds: Any, lang: str) -> Iterator[str]:
     for item in ds:
         yield item[lang]
 
 
 # Migrating to Vocab and get_tokenizer did not seem to be worth it.
 # Using the HuggingFace Tokenizer instead
-def get_or_build_tokenizer2(config: dict, model_folder: str, ds, lang: str) -> Tokenizer:
+def get_or_build_tokenizer2(config: ConfigDict, model_folder: str, ds: Any, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         tokenizer = Tokenizer(WordLevel(unk_token=UNK))
@@ -159,7 +156,7 @@ def get_or_build_tokenizer2(config: dict, model_folder: str, ds, lang: str) -> T
     return tokenizer
 
 
-def get_tokenizer2(config: dict, model_folder: str, lang: str) -> Tokenizer:
+def get_tokenizer2(config: ConfigDict, model_folder: str, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
@@ -169,7 +166,7 @@ def get_tokenizer2(config: dict, model_folder: str, lang: str) -> Tokenizer:
     return tokenizer
 
 
-def get_ds2(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
+def get_ds2(config: ConfigDict, model_folder: str) -> tuple[DataLoader[Any], DataLoader[Any], Tokenizer, Tokenizer]:
     # load_dataset(path, name, split=)
     ds_raw = load_dataset(
         "csv", data_files=f"custom_datasets/{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}/dataset.csv", sep="|", split="train"
@@ -205,7 +202,7 @@ def get_ds2(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
 
 
-def get_testing_ds2(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:
+def get_testing_ds2(config: ConfigDict, model_folder: str, sentence: str) -> tuple[str, str, Tokenizer, Tokenizer]:
 
     # build tokenizers
     tokenizer_src = get_tokenizer2(config, model_folder, config["lang_src"])

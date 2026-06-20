@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-import sys
 import getopt
+import sys
 
 from config import get_config
-
 from tutorial1 import translate1
 from tutorial2 import translate2
 from tutorial3 import translate3
@@ -14,12 +13,12 @@ from tutorial7 import translate7
 from tutorial8 import translate8
 
 
-def main(argv):
+def main(argv: list[str]) -> None:
     config_filename = None
     model_folder = None
     sentence = "I am not a very good a student."
     try:
-        opts, args = getopt.getopt(argv, "hc:m:s:", ["config=", "modelfolder=", "sentence="])
+        opts, _args = getopt.getopt(argv, "hc:m:s:", ["config=", "modelfolder=", "sentence="])
     except getopt.GetoptError:
         print("translate.py -c <config_file> -m <model_folder> -s <sentence>")
         sys.exit(2)
@@ -39,23 +38,23 @@ def main(argv):
 
     match config["alt_model"]:
         case "model1":
-            _ = translate1(config, sentence)
+            translate1(config, sentence)
         case "model2":
-            _ = translate2(config, sentence)
+            translate2(config, sentence)
         case "model3":
-            _ = translate3(config, sentence)
+            translate3(config, sentence)
         case "model4":
-            _ = translate4(config, sentence)
+            translate4(config, sentence)
         case "model5":
-            _ = translate5(config, sentence)
+            translate5(config, sentence)
         case "model6":
-            _ = translate6(config, sentence)
+            translate6(config, sentence)
         case "model7":
-            _ = translate7(config, sentence)
+            translate7(config, sentence)
         case "model8":
-            _ = translate8(config, sentence)
+            translate8(config, sentence)
         case _:
-            _ = translate1(config, sentence)
+            translate1(config, sentence)
 
 
 if __name__ == "__main__":

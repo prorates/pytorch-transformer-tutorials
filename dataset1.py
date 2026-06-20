@@ -1,27 +1,25 @@
 # This is based on the following [video](https://youtu.be/ISNdQcPhsts)
 # The code is original code is available [here](https://github.com/hkproj/pytorch-transformer)
 
-import torch
-from torch import Tensor
-from torch.utils.data import Dataset, DataLoader, random_split
-from torch.autograd import Variable
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
-from typing import Tuple
-
+import torch
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
-from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.trainers import WordLevelTrainer
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset, random_split
 
-from pathlib import Path
-from config import EOS, SOS, PAD, UNK
+from config import EOS, PAD, SOS, UNK, ConfigDict
 
 
-class Dataset1(Dataset):
+class Dataset1(Dataset[Any]):
 
-    def __init__(self, ds: Dataset, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer, src_lang: str, tgt_lang: str, seq_len: int) -> None:
+    def __init__(self, ds: Any, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer, src_lang: str, tgt_lang: str, seq_len: int) -> None:
         super().__init__()
 
         self.ds = ds
@@ -41,7 +39,7 @@ class Dataset1(Dataset):
         self.eos_token = torch.tensor([tokenizer_tgt.token_to_id(EOS)], dtype=torch.int64)
         self.pad_token = torch.tensor([tokenizer_tgt.token_to_id(PAD)], dtype=torch.int64)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.ds)
 
     def __getitem__(self, idx: Any) -> Any:
@@ -134,12 +132,12 @@ def translation_mask(size: int) -> Tensor:
     return mask
 
 
-def get_all_sentences1(ds, lang):
+def get_all_sentences1(ds: Any, lang: str) -> Iterator[str]:
     for item in ds:
         yield item["translation"][lang]
 
 
-def get_or_build_tokenizer1(config: dict, model_folder: str, ds, lang: str) -> Tokenizer:
+def get_or_build_tokenizer1(config: ConfigDict, model_folder: str, ds: Any, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         # Most code taken from: https://huggingface.co/docs/tokenizers/quicktour
@@ -153,7 +151,7 @@ def get_or_build_tokenizer1(config: dict, model_folder: str, ds, lang: str) -> T
     return tokenizer
 
 
-def get_tokenizer1(config: dict, model_folder: str, lang: str) -> Tokenizer:
+def get_tokenizer1(config: ConfigDict, model_folder: str, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
@@ -163,7 +161,7 @@ def get_tokenizer1(config: dict, model_folder: str, lang: str) -> Tokenizer:
     return tokenizer
 
 
-def get_ds1(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
+def get_ds1(config: ConfigDict, model_folder: str) -> tuple[DataLoader[Any], DataLoader[Any], Tokenizer, Tokenizer]:
     # load_dataset(path, name, split=)
     ds_raw = load_dataset(f"{config['datasource']}", f"{config['lang_src']}-{config['lang_tgt']}", split="train")
 
@@ -197,7 +195,7 @@ def get_ds1(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
 
 
-def get_testing_ds1(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:
+def get_testing_ds1(config: ConfigDict, model_folder: str, sentence: str) -> tuple[str, str | None, Tokenizer, Tokenizer]:
 
     # build tokenizers
     tokenizer_src = get_tokenizer1(config, model_folder, config["lang_src"])

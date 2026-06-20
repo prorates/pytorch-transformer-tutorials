@@ -1,16 +1,17 @@
 # The source code seems to be [here](https://github.com/SamLynnEvans/Transformer?ref=blog.floydhub.com)
 
+import copy
+import math
+
 import torch
 import torch.nn as nn
-import math
-from torch.autograd import Variable
 import torch.nn.functional as F
-import math
-import copy
+from torch import Tensor
+from torch.autograd import Variable
 
 
 class Norm(nn.Module):
-    def __init__(self, d_model: int, eps=1e-6):
+    def __init__(self, d_model: int, eps: float = 1e-6) -> None:
         super().__init__()
 
         self.size = d_model
@@ -21,13 +22,13 @@ class Norm(nn.Module):
 
         self.eps = eps
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         norm = self.alpha * (x - x.mean(dim=-1, keepdim=True)) / (x.std(dim=-1, keepdim=True) + self.eps) + self.bias
         return norm
 
 
 class FeedForward(nn.Module):
-    def __init__(self, d_model: int, d_ff: int = 2048, dropout=0.1):
+    def __init__(self, d_model: int, d_ff: int = 2048, dropout: float = 0.1) -> None:
         super().__init__()
 
         # We set d_ff as a default to 2048
@@ -35,7 +36,7 @@ class FeedForward(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.linear_2 = nn.Linear(d_ff, d_model)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         x = self.dropout(F.relu(self.linear_1(x)))
         x = self.linear_2(x)
         return x
@@ -43,17 +44,17 @@ class FeedForward(nn.Module):
 
 class Embedder(nn.Module):
 
-    def __init__(self, vocab_size: int, d_model: int):
+    def __init__(self, vocab_size: int, d_model: int) -> None:
         super().__init__()
         self.d_model = d_model
         self.embed = nn.Embedding(vocab_size, d_model)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         return self.embed(x)
 
 
 class PositionalEncoder(nn.Module):
-    def __init__(self, d_model: int, max_seq_len: int = 200, dropout=0.1):
+    def __init__(self, d_model: int, max_seq_len: int = 200, dropout: float = 0.1) -> None:
         super().__init__()
         self.d_model = d_model
         self.dropout = nn.Dropout(dropout)
@@ -67,7 +68,7 @@ class PositionalEncoder(nn.Module):
         pe = pe.unsqueeze(0)
         self.register_buffer("pe", pe)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         # make embeddings relatively larger
         x = x * math.sqrt(self.d_model)
         # add constant to embedding
@@ -80,7 +81,7 @@ class PositionalEncoder(nn.Module):
 
 
 class MultiHeadAttention(nn.Module):
-    def __init__(self, heads, d_model, dropout=0.1):
+    def __init__(self, heads: int, d_model: int, dropout: float = 0.1) -> None:
         super().__init__()
 
         self.d_model = d_model
@@ -95,7 +96,7 @@ class MultiHeadAttention(nn.Module):
         self.out = nn.Linear(d_model, d_model)
 
     @staticmethod
-    def attention(q, k, v, d_k, mask=None, dropout=None):
+    def attention(q: Tensor, k: Tensor, v: Tensor, d_k: int, mask: Tensor | None = None, dropout: nn.Dropout | None = None) -> Tensor:
         scores = torch.matmul(q, k.transpose(-2, -1)) / math.sqrt(d_k)
 
         if mask is not None:
@@ -111,7 +112,7 @@ class MultiHeadAttention(nn.Module):
         output = torch.matmul(scores, v)
         return output
 
-    def forward(self, q, k, v, mask=None):
+    def forward(self, q: Tensor, k: Tensor, v: Tensor, mask: Tensor | None = None) -> Tensor:
         bs = q.size(0)
 
         # perform linear operation and split into N heads
@@ -134,7 +135,7 @@ class MultiHeadAttention(nn.Module):
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, d_model, heads, dropout=0.1):
+    def __init__(self, d_model: int, heads: int, dropout: float = 0.1) -> None:
         super().__init__()
         self.norm_1 = Norm(d_model)
         self.norm_2 = Norm(d_model)
@@ -143,7 +144,7 @@ class EncoderLayer(nn.Module):
         self.dropout_1 = nn.Dropout(dropout)
         self.dropout_2 = nn.Dropout(dropout)
 
-    def forward(self, x, mask):
+    def forward(self, x: Tensor, mask: Tensor) -> Tensor:
         x2 = self.norm_1(x)
         x = x + self.dropout_1(self.attn(x2, x2, x2, mask))
         x2 = self.norm_2(x)
@@ -152,7 +153,7 @@ class EncoderLayer(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, vocab_size, seq_len, d_model, N, heads, dropout):
+    def __init__(self, vocab_size: int, seq_len: int, d_model: int, N: int, heads: int, dropout: float) -> None:
         super().__init__()
         self.N = N
         self.embed = Embedder(vocab_size, d_model)
@@ -161,10 +162,10 @@ class Encoder(nn.Module):
         self.norm = Norm(d_model)
 
     @staticmethod
-    def get_clones(module, N):
+    def get_clones(module: nn.Module, N: int) -> nn.ModuleList:
         return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
-    def forward(self, src, mask):
+    def forward(self, src: Tensor, mask: Tensor) -> Tensor:
         x = self.embed(src)
         x = self.pe(x)
         for i in range(self.N):
@@ -177,7 +178,7 @@ class Encoder(nn.Module):
 
 
 class DecoderLayer(nn.Module):
-    def __init__(self, d_model, heads, dropout=0.1):
+    def __init__(self, d_model: int, heads: int, dropout: float = 0.1) -> None:
         super().__init__()
         self.norm_1 = Norm(d_model)
         self.norm_2 = Norm(d_model)
@@ -191,7 +192,7 @@ class DecoderLayer(nn.Module):
         self.attn_2 = MultiHeadAttention(heads, d_model, dropout=dropout)
         self.ff = FeedForward(d_model, dropout=dropout)
 
-    def forward(self, x, e_outputs, src_mask, trg_mask):
+    def forward(self, x: Tensor, e_outputs: Tensor, src_mask: Tensor, trg_mask: Tensor) -> Tensor:
         x2 = self.norm_1(x)
         x = x + self.dropout_1(self.attn_1(x2, x2, x2, trg_mask))
         x2 = self.norm_2(x)
@@ -202,7 +203,7 @@ class DecoderLayer(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, vocab_size, seq_len, d_model, N, heads, dropout):
+    def __init__(self, vocab_size: int, seq_len: int, d_model: int, N: int, heads: int, dropout: float) -> None:
         super().__init__()
         self.N = N
         self.embed = Embedder(vocab_size, d_model)
@@ -211,10 +212,10 @@ class Decoder(nn.Module):
         self.norm = Norm(d_model)
 
     @staticmethod
-    def get_clones(module, N):
+    def get_clones(module: nn.Module, N: int) -> nn.ModuleList:
         return nn.ModuleList([copy.deepcopy(module) for i in range(N)])
 
-    def forward(self, trg, e_outputs, src_mask, trg_mask):
+    def forward(self, trg: Tensor, e_outputs: Tensor, src_mask: Tensor, trg_mask: Tensor) -> Tensor:
         x = self.embed(trg)
         x = self.pe(x)
         for i in range(self.N):
@@ -224,13 +225,15 @@ class Decoder(nn.Module):
 
 class Transformer3(nn.Module):
 
-    def __init__(self, src_vocab_size: int, trg_vocab_size: int, src_seq_len: int, trg_seq_len: int, d_model: int, N: int, heads: int, dropout: float):
+    def __init__(
+        self, src_vocab_size: int, trg_vocab_size: int, src_seq_len: int, trg_seq_len: int, d_model: int, N: int, heads: int, dropout: float
+    ) -> None:
         super().__init__()
         self.encoder = Encoder(src_vocab_size, src_seq_len, d_model, N, heads, dropout)
         self.decoder = Decoder(trg_vocab_size, trg_seq_len, d_model, N, heads, dropout)
         self.out = nn.Linear(d_model, trg_vocab_size)
 
-    def forward(self, src, trg, src_mask, trg_mask):
+    def forward(self, src: Tensor, trg: Tensor, src_mask: Tensor, trg_mask: Tensor) -> Tensor:
         e_outputs = self.encoder(src, src_mask)
         d_output = self.decoder(trg, e_outputs, src_mask, trg_mask)
         output = self.out(d_output)
@@ -239,7 +242,7 @@ class Transformer3(nn.Module):
 
 def build_transformer3(
     src_vocab_size: int, trg_vocab_size: int, src_seq_len: int, trg_seq_len: int, d_model: int = 512, n_layers: int = 6, heads: int = 8, dropout: float = 0.1
-):
+) -> Transformer3:
 
     assert d_model % heads == 0
     assert dropout < 1
