@@ -3,13 +3,13 @@
 import math
 
 import torch
-from torch import nn, Tensor
+from torch import Tensor, nn
 from torch.nn import TransformerEncoder, TransformerEncoderLayer
 
 
 class PositionalEncoding(nn.Module):
 
-    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000):
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000) -> None:
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -31,7 +31,7 @@ class PositionalEncoding(nn.Module):
 
 class Transformer7(nn.Module):
 
-    def __init__(self, ntoken: int, d_model: int, nhead: int, d_hid: int, nlayers: int, dropout: float = 0.5):
+    def __init__(self, ntoken: int, d_model: int, nhead: int, d_hid: int, nlayers: int, dropout: float = 0.5) -> None:
         super().__init__()
         self.model_type = "Transformer"
         self.pos_encoder = PositionalEncoding(d_model, dropout)
@@ -49,7 +49,7 @@ class Transformer7(nn.Module):
         self.linear.bias.data.zero_()
         self.linear.weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, src: Tensor, src_mask: Tensor = None) -> Tensor:
+    def forward(self, src: Tensor, src_mask: Tensor | None = None) -> Tensor:
         """
         Arguments:
             src: Tensor, shape ``[seq_len, batch_size]``

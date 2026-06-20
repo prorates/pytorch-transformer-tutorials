@@ -1,34 +1,34 @@
 # See [Huggineface Transformer Tutorial](https://pytorch.org/tutorials/beginner/transformer_tutorial.html)
 
 import math
-import math
 import time
 from pathlib import Path
+from typing import Any
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm import tqdm
 
-from config import get_console_width, get_device, get_model_folder, get_config
+from config import ConfigDict, get_config, get_console_width, get_device, get_model_folder
 from dataset7 import get_ds7
 from model7 import Transformer7, build_transformer7
 from utils import reload_model, save_model
 
 
-def build_model7(config: dict, vocab_tgt_len: int) -> Transformer7:
+def build_model7(config: ConfigDict, vocab_tgt_len: int) -> Transformer7:
     model = build_transformer7(vocab_tgt_len, d_model=config["d_model"], N=config["N"], h=config["h"], dropout=config["dropout"], d_ff=config["d_ff"])
     return model
 
 
-def train_model7(config: dict):
+def train_model7(config: ConfigDict) -> None:
     device = get_device()
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    train_dataloader, val_dataloader, test_dataloader, tokenizer_tgt = get_ds7(config, model_folder)
+    train_dataloader, val_dataloader, _test_dataloader, tokenizer_tgt = get_ds7(config, model_folder)
     transformer = build_model7(config, tokenizer_tgt.get_vocab_size()).to(device)
 
     # Tensorboard
@@ -36,10 +36,10 @@ def train_model7(config: dict):
 
     lr = 5.0  # learning rate
     optimizer = torch.optim.SGD(transformer.parameters(), lr=lr)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1.0, gamma=0.95)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=0.95)
 
     best_val_loss = float("inf")
-    total_loss = 0
+    total_loss = 0.0
     initial_epoch = 0
     global_step = 0
     log_interval = 200
@@ -91,7 +91,7 @@ def train_model7(config: dict):
                     f"lr {lr:02.2f} | ms/batch {ms_per_batch:5.2f} | "
                     f"loss {cur_loss:5.2f} | ppl {ppl:8.2f}"
                 )
-                total_loss = 0
+                total_loss = 0.0
                 start_time = time.time()
 
             global_step += 1
@@ -122,7 +122,7 @@ def train_model7(config: dict):
     # print(f'| End of training | test loss {test_loss:5.2f} | ' f'test ppl {test_ppl:8.2f}')
 
 
-def evaluate_model7(transformer: Transformer7, validation_ds: DataLoader, ntokens: int, device):
+def evaluate_model7(transformer: Transformer7, validation_ds: DataLoader[Any], ntokens: int, device: str) -> float:
 
     transformer.eval()  # turn on evaluation mode
     total_loss = 0.0
@@ -130,7 +130,7 @@ def evaluate_model7(transformer: Transformer7, validation_ds: DataLoader, ntoken
     criterion = nn.CrossEntropyLoss()
 
     with torch.no_grad():
-        for batch_num, batch in enumerate(validation_ds):
+        for batch in validation_ds:
             # count += 1
             data, targets = batch
             data = data.squeeze(0).to(device)
@@ -151,9 +151,7 @@ def evaluate_model7(transformer: Transformer7, validation_ds: DataLoader, ntoken
     return total_loss / (len(validation_ds) - 1)
 
 
-def translate7(config: dict, sentence: str):
-    device = get_device()
-
+def translate7(config: ConfigDict, sentence: str) -> str:
     model_folder = get_model_folder(config)
     if not Path.exists(Path(model_folder)):
         raise ValueError(f"{model_folder} model_folder does not exist")
@@ -161,7 +159,7 @@ def translate7(config: dict, sentence: str):
     raise RuntimeError("Not implemented yet")
 
 
-def debug_code_model7(config: dict, device):
+def debug_code_model7(config: ConfigDict, device: str) -> None:
     config["model"] = "model7"
     config["datasource"] = "translate"
     config["lang_src"] = "en"
@@ -170,7 +168,7 @@ def debug_code_model7(config: dict, device):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    train_dataloader, val_dataloader, test_dataloader, tokenizer_tgt = get_ds7(config, model_folder)
+    _train_dataloader, _val_dataloader, _test_dataloader, tokenizer_tgt = get_ds7(config, model_folder)
     model = build_model7(config, tokenizer_tgt.get_vocab_size()).to(device)
 
     print(model)
