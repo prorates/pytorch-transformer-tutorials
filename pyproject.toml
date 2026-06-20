@@ -5,8 +5,9 @@
 line-length = 159
 target-version = "py312"
 # model5.py is a near-verbatim vendored copy of torch's nn.Transformer; keep it
-# close to upstream rather than reformatting/relinting it.
-extend-exclude = ["model5.py"]
+# close to upstream rather than reformatting/relinting it. custom_datasets holds
+# one-off data-prep scripts and notebooks are out of scope for the lint baseline.
+extend-exclude = ["model5.py", "custom_datasets", "*.ipynb"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
@@ -19,8 +20,8 @@ strict = true
 # rather than signal. We still require our own functions to be annotated.
 warn_return_any = false
 disallow_untyped_calls = false
-# model5.py is vendored torch source; do not type-check it.
-exclude = ['model5\.py']
+# model5.py is vendored torch source; custom_datasets holds one-off prep scripts.
+exclude = ['model5\.py', 'custom_datasets/']
 
 # Third-party libs without (complete) type stubs.
 [[tool.mypy.overrides]]

@@ -38,23 +38,23 @@ def main(argv: list[str]) -> None:
 
     match config["alt_model"]:
         case "model1":
-            _ = translate1(config, sentence)
+            translate1(config, sentence)
         case "model2":
-            _ = translate2(config, sentence)
+            translate2(config, sentence)
         case "model3":
-            _ = translate3(config, sentence)
+            translate3(config, sentence)
         case "model4":
-            _ = translate4(config, sentence)
+            translate4(config, sentence)
         case "model5":
-            _ = translate5(config, sentence)
+            translate5(config, sentence)
         case "model6":
-            _ = translate6(config, sentence)
+            translate6(config, sentence)
         case "model7":
-            _ = translate7(config, sentence)
+            translate7(config, sentence)
         case "model8":
-            _ = translate8(config, sentence)
+            translate8(config, sentence)
         case _:
-            _ = translate1(config, sentence)
+            translate1(config, sentence)
 
 
 if __name__ == "__main__":
