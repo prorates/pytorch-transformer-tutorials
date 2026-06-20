@@ -3,6 +3,7 @@
 
 import torch
 import torch.nn as nn
+from torch import Tensor
 from torch.nn import functional as F
 
 # JEB: Ugly but will do for right now
@@ -14,7 +15,7 @@ device = get_device()
 class Head(nn.Module):
     """one head of self-attention"""
 
-    def __init__(self, head_size: int, n_embd: int, block_size: int, dropout: float):
+    def __init__(self, head_size: int, n_embd: int, block_size: int, dropout: float) -> None:
         super().__init__()
         self.key = nn.Linear(n_embd, head_size, bias=False)
         self.query = nn.Linear(n_embd, head_size, bias=False)
@@ -23,8 +24,8 @@ class Head(nn.Module):
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
-        B, T, C = x.shape
+    def forward(self, x: Tensor) -> Tensor:
+        _B, T, C = x.shape
         # Every single node is emiting a query and a key vector.
         # The Query vector is what I'm looking for.
         # The Key vector is what do I contain.
@@ -52,13 +53,13 @@ class Head(nn.Module):
 class MultiHeadAttention(nn.Module):
     """multiple heads of self-attention in parallel"""
 
-    def __init__(self, num_heads: int, head_size: int, n_embd: int, block_size: int, dropout: float):
+    def __init__(self, num_heads: int, head_size: int, n_embd: int, block_size: int, dropout: float) -> None:
         super().__init__()
         self.heads = nn.ModuleList([Head(head_size, n_embd, block_size, dropout) for _ in range(num_heads)])
         self.proj = nn.Linear(n_embd, n_embd)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         out = torch.cat([h(x) for h in self.heads], dim=-1)
         out = self.dropout(self.proj(out))
         return out
@@ -67,7 +68,7 @@ class MultiHeadAttention(nn.Module):
 class FeedFoward(nn.Module):
     """a simple linear layer followed by a non-linearity"""
 
-    def __init__(self, n_embd: int, dropout: float):
+    def __init__(self, n_embd: int, dropout: float) -> None:
         super().__init__()
         self.net = nn.Sequential(
             # DFF is 4 time n_embd
@@ -77,14 +78,14 @@ class FeedFoward(nn.Module):
             nn.Dropout(dropout),
         )
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         return self.net(x)
 
 
 class Block(nn.Module):
     """Transformer block: communication followed by computation"""
 
-    def __init__(self, n_embd: int, n_head: int, block_size: int, dropout: float):
+    def __init__(self, n_embd: int, n_head: int, block_size: int, dropout: float) -> None:
         # n_embd: embedding dimension, n_head: the number of heads we'd like
         super().__init__()
         head_size = n_embd // n_head
@@ -93,7 +94,7 @@ class Block(nn.Module):
         self.ln1 = nn.LayerNorm(n_embd)
         self.ln2 = nn.LayerNorm(n_embd)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         # JEB: This is one of the only that changed compared to the original
         # paper. The normalization is made first in this model.
         x = x + self.sa(self.ln1(x))
@@ -106,7 +107,7 @@ class Block(nn.Module):
 
 class Transformer8(nn.Module):
 
-    def __init__(self, vocab_size: int, n_embd: int, n_layer: int, n_head: int, block_size: int, dropout: float):
+    def __init__(self, vocab_size: int, n_embd: int, n_layer: int, n_head: int, block_size: int, dropout: float) -> None:
         super().__init__()
         # each token directly reads off the logits for the next token from a lookup table
         self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
@@ -116,7 +117,7 @@ class Transformer8(nn.Module):
         self.lm_head = nn.Linear(n_embd, vocab_size)
         self.block_size = block_size
 
-    def forward(self, idx, targets=None):
+    def forward(self, idx: Tensor, targets: Tensor | None = None) -> tuple[Tensor, Tensor | None]:
         B, T = idx.shape
         # idx and targets are both (B,T) tensor of integers
         tok_emb = self.token_embedding_table(idx)  # (B,T,C)
@@ -140,13 +141,13 @@ class Transformer8(nn.Module):
 
         return logits, loss
 
-    def generate(self, idx, max_new_tokens):
+    def generate(self, idx: Tensor, max_new_tokens: int) -> Tensor:
         # idx is (B, T) array of indices in the current context
         for _ in range(max_new_tokens):
             # crop idx to the last block_size tokens
             idx_cond = idx[:, -self.block_size :]
             # get the predictions. (We invoke forward here with a target)
-            logits, loss = self(idx_cond)
+            logits, _loss = self(idx_cond)
             # focus only on the last time step
             logits = logits[:, -1, :]  # becomes (B, C)
             # apply softmax to get probabilities

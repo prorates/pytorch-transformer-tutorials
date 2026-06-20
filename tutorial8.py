@@ -1,32 +1,32 @@
 # See [video](https://youtu.be/kCc8FmEb1nY)
 # The colab repo is [here](https://colab.research.google.com/drive/1JMLa53HDuA-i7ZBmqV7ZnA3c_fvtXnx-?usp=sharing)
 
-import time
 from pathlib import Path
+from typing import Any
 
 import torch
+from torch import Tensor
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from config import get_config, get_device, get_model_folder
-from dataset8 import get_ds8, get_testing_ds8, Dataset8
+from config import ConfigDict, get_config, get_device, get_model_folder
+from dataset8 import Dataset8, get_ds8, get_testing_ds8
 from model8 import Transformer8, build_transformer8
-from utils import reload_model, save_model, load_trained_model
+from utils import load_trained_model, reload_model, save_model
 
 
-def build_model8(config: dict, vocab_tgt_len: int) -> Transformer8:
+def build_model8(config: ConfigDict, vocab_tgt_len: int) -> Transformer8:
     model = build_transformer8(
         vocab_tgt_len, d_model=config["d_model"], N=config["N"], h=config["h"], block_size=config["block_size"], dropout=config["dropout"], d_ff=config["d_ff"]
     )
     return model
 
 
-def train_model8(config: dict):
+def train_model8(config: ConfigDict) -> None:
     # hyperparameters (config-overridable; defaults preserve original behavior)
-    max_iters = config.get("max_iters", 5000)
-    eval_interval = config.get("eval_interval", 100)
-    eval_iters = config.get("eval_iters", 200)
-    total_loss = 0
+    max_iters: int = config.get("max_iters", 5000)
+    eval_interval: int = config.get("eval_interval", 100)
+    eval_iters: int = config.get("eval_iters", 200)
     initial_epoch = 0
     global_step = 0
 
@@ -70,7 +70,8 @@ def train_model8(config: dict):
             xb, yb = train_ds.get_batch()
 
             # evaluate the loss
-            logits, loss = transformer(xb.to(device), yb.to(device))
+            _logits, loss = transformer(xb.to(device), yb.to(device))
+            assert loss is not None  # targets were provided, so forward returns a loss
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
             optimizer.step()
@@ -84,9 +85,16 @@ def train_model8(config: dict):
 
 
 @torch.no_grad()
-def evaluate_model8(transformer: Transformer8, val_dataloader: DataLoader, eval_iters: int, device, train_ds: Dataset8, val_ds: Dataset8):
+def evaluate_model8(
+    transformer: Transformer8,
+    val_dataloader: DataLoader[Any],
+    eval_iters: int,
+    device: str,
+    train_ds: Dataset8,
+    val_ds: Dataset8,
+) -> dict[str, Tensor]:
 
-    out = {"train": 0, "val": 0}
+    out: dict[str, Tensor] = {}
     transformer.eval()
 
     tmp = {"train": train_ds, "val": val_ds}
@@ -94,7 +102,8 @@ def evaluate_model8(transformer: Transformer8, val_dataloader: DataLoader, eval_
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = value.get_batch()
-            logits, loss = transformer(X.to(device), Y.to(device))
+            _logits, loss = transformer(X.to(device), Y.to(device))
+            assert loss is not None  # targets were provided, so forward returns a loss
             losses[k] = loss.item()
         out[key] = losses.mean()
 
@@ -111,7 +120,7 @@ def evaluate_model8(transformer: Transformer8, val_dataloader: DataLoader, eval_
     return out
 
 
-def translate8(config: dict, sentence: str):
+def translate8(config: ConfigDict, sentence: str) -> None:
     device = get_device()
 
     model_folder = get_model_folder(config)
@@ -129,8 +138,8 @@ def translate8(config: dict, sentence: str):
     print(tokenizer.decode(model.generate(context, max_new_tokens=2000)[0].tolist()))
 
 
-def debug_code_model8(config: dict, device):
-    config["model"] = "model7"
+def debug_code_model8(config: ConfigDict, device: str) -> None:
+    config["model"] = "model8"
     config["datasource"] = "translate"
     config["lang_src"] = "en"
     config["lang_tgt"] = "fr"
@@ -138,7 +147,7 @@ def debug_code_model8(config: dict, device):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    train_dataloader, val_dataloader, test_dataloader, tokenizer_tgt, train_ds, val_ds = get_ds8(config, model_folder)
+    _train_dataloader, _val_dataloader, tokenizer_tgt, _train_ds, _val_ds = get_ds8(config, model_folder)
     model = build_model8(config, tokenizer_tgt.get_vocab_size()).to(device)
 
     print(model)

@@ -2,20 +2,21 @@
 # The colab repo is [here](https://colab.research.google.com/drive/1JMLa53HDuA-i7ZBmqV7ZnA3c_fvtXnx-?usp=sharing)
 
 
+from pathlib import Path
+from typing import Any
+
 import torch
-from torch import Tensor
-from typing import Tuple
-from torch.utils.data import DataLoader, Dataset
 from tokenizers import Tokenizer
 from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
 from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.trainers import BpeTrainer
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset
 
-from pathlib import Path
-from config import EOS, SOS, PAD, UNK, get_config, get_model_folder
+from config import EOS, PAD, SOS, UNK, ConfigDict, get_config, get_model_folder
 
 
-class Dataset8(Dataset):
+class Dataset8(Dataset[Any]):
 
     def __init__(self, raw_text: str, tokenizer: Tokenizer, batch_size: int, block_size: int) -> None:
         super().__init__()
@@ -24,42 +25,42 @@ class Dataset8(Dataset):
         self.block_size: int = block_size
         self.batch_size: int = batch_size
 
-    def data_process(self, raw_text: str, tokenizer: Tokenizer):
+    def data_process(self, raw_text: str, tokenizer: Tokenizer) -> Tensor:
         """Converts raw text into a flat Tensor."""
         data = torch.tensor(tokenizer.encode(raw_text).ids, dtype=torch.long)
         return data
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.processed_data) // self.block_size
 
-    def get_batch(self) -> Tuple[Tensor, Tensor]:
+    def get_batch(self) -> tuple[Tensor, Tensor]:
         # generate a small batch of data of inputs x and targets y
         ix = torch.randint(len(self.processed_data) - self.block_size, (self.batch_size,))
         x = torch.stack([self.processed_data[i : i + self.block_size] for i in ix])
         y = torch.stack([self.processed_data[i + 1 : i + self.block_size + 1] for i in ix])
         return x, y
 
-    def __getitem__(self, idx: int) -> Tuple[Tensor, Tensor]:
+    def __getitem__(self, idx: int) -> tuple[Tensor, Tensor]:
         # The iterator is supposed to stack them up to batch_size
         x = self.processed_data[idx : idx + self.block_size]
         y = self.processed_data[idx + 1 : idx + self.block_size + 1]
         return x, y
 
 
-def get_or_build_tokenizer8(config: dict, model_folder: str, ds: str, lang: str) -> Tokenizer:
+def get_or_build_tokenizer8(config: ConfigDict, model_folder: str, ds: str, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         tokenizer = Tokenizer(BPE(char_level=True, unk_token=UNK))
         tokenizer.pre_tokenizer = Whitespace()
         trainer = BpeTrainer(special_tokens=[UNK, PAD, SOS, EOS, " ", "?", "!"], max_token_length=1, min_frequency=1)
-        tokenizer.train_from_iterator(sorted(list(set(ds))), trainer=trainer)
+        tokenizer.train_from_iterator(sorted(set(ds)), trainer=trainer)
         tokenizer.save(str(tokenizer_path))
     else:
         tokenizer = Tokenizer.from_file(str(tokenizer_path))
     return tokenizer
 
 
-def get_tokenizer8(config: dict, model_folder: str, lang: str) -> Tokenizer:
+def get_tokenizer8(config: ConfigDict, model_folder: str, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
@@ -69,17 +70,17 @@ def get_tokenizer8(config: dict, model_folder: str, lang: str) -> Tokenizer:
     return tokenizer
 
 
-def load_custom_dataset(config: dict, model_folder: str) -> str:
+def load_custom_dataset(config: ConfigDict, model_folder: str) -> str:
     src_file = f"custom_datasets/{config['datasource']}/{config['lang_src']}.txt"
 
-    with open(src_file, "r", encoding="utf-8") as file:
+    with open(src_file, encoding="utf-8") as file:
         # src_sentences = file.readlines()
         src_sentences = file.read()
 
     return src_sentences
 
 
-def get_ds8(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Dataset8, Dataset8]:
+def get_ds8(config: ConfigDict, model_folder: str) -> tuple[DataLoader[Any], DataLoader[Any], Tokenizer, Dataset8, Dataset8]:
 
     raw_text = load_custom_dataset(config, model_folder)
     tokenizer = get_or_build_tokenizer8(config, model_folder, raw_text, config["lang_src"])
@@ -104,7 +105,7 @@ def get_ds8(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
     return train_dataloader, val_dataloader, tokenizer, train_ds, val_ds
 
 
-def get_testing_ds8(config: dict, model_folder: str) -> Tokenizer:
+def get_testing_ds8(config: ConfigDict, model_folder: str) -> Tokenizer:
 
     # build tokenizers
     tokenizer = get_tokenizer8(config, model_folder, config["lang_src"])
@@ -112,19 +113,18 @@ def get_testing_ds8(config: dict, model_folder: str) -> Tokenizer:
     return tokenizer
 
 
-def local_tokenizer(text: str):
+def local_tokenizer(text: str) -> tuple[Tensor, Tensor]:
     # here are all the unique characters that occur in this text
-    chars = sorted(list(set(text)))
-    vocab_size = len(chars)
+    chars = sorted(set(text))
     # create a mapping from characters to integers
     stoi = {ch: i for i, ch in enumerate(chars)}
-    itos = {i: ch for i, ch in enumerate(chars)}
+    itos = dict(enumerate(chars))
 
-    def encode(s):
+    def encode(s: str) -> list[int]:
         return [stoi[c] for c in s]  # encoder: take a string, output a list of integers
 
-    def decode(l):
-        return "".join([itos[i] for i in l])  # decoder: take a list of integers, output a string
+    def decode(token_ids: list[int]) -> str:
+        return "".join([itos[i] for i in token_ids])  # decoder: take a list of integers, output a string
 
     # Train and test splits
     data = torch.tensor(encode(text), dtype=torch.long)
@@ -134,7 +134,7 @@ def local_tokenizer(text: str):
     return train_data, val_data
 
 
-def local_testing():
+def local_testing() -> None:
 
     config = get_config(modelfolder="tinyshakespeare_en_en_model8")
     modelfolder = get_model_folder(config)
@@ -150,11 +150,11 @@ def local_testing():
     batch_size = config["batch_size"]
     block_size = config["block_size"]
 
-    local_train_data, local_val_data = local_tokenizer(raw_text)
+    local_train_data, _local_val_data = local_tokenizer(raw_text)
     print(local_train_data[:256])
 
     train_ds = Dataset8(raw_text[:n], tokenizer=tokenizer, batch_size=batch_size, block_size=block_size)
-    val_ds = Dataset8(raw_text[n:], tokenizer=tokenizer, batch_size=batch_size, block_size=block_size)
+    _val_ds = Dataset8(raw_text[n:], tokenizer=tokenizer, batch_size=batch_size, block_size=block_size)
     train_dataloader = DataLoader(train_ds, shuffle=True, batch_size=batch_size)
     print(train_ds.processed_data[:256])
     print(raw_text[:256])
