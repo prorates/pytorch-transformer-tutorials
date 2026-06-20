@@ -1,33 +1,30 @@
 # The source code seems to be [here](https://github.com/SamLynnEvans/Transformer?ref=blog.floydhub.com)
 
-import torch
-from torch import Tensor
-from torch.utils.data import Dataset, DataLoader, random_split
-from torch.autograd import Variable
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
+
 import numpy as np
-
-from typing import Tuple
-
+import torch
 from datasets import load_dataset
 from tokenizers import Tokenizer
 from tokenizers.models import WordLevel
-from tokenizers.trainers import WordLevelTrainer
 from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.trainers import WordLevelTrainer
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset, random_split
 
-from pathlib import Path
-from config import EOS, SOS, PAD, UNK
+from config import EOS, PAD, SOS, UNK, ConfigDict
 
 
 def nopeak_mask(size: int) -> Tensor:
     np_mask = np.triu(np.ones((1, size, size)), k=1).astype("uint8")
-    np_mask = Variable(torch.from_numpy(np_mask == 0))
-    return np_mask
+    return torch.from_numpy(np_mask == 0)
 
 
-class Dataset3(Dataset):
+class Dataset3(Dataset[Any]):
 
-    def __init__(self, ds, t_src: Tokenizer, t_trg: Tokenizer, src_lang: str, tgt_lang: str, seq_len: int) -> None:
+    def __init__(self, ds: Any, t_src: Tokenizer, t_trg: Tokenizer, src_lang: str, tgt_lang: str, seq_len: int) -> None:
         super().__init__()
 
         self.ds = ds
@@ -41,7 +38,7 @@ class Dataset3(Dataset):
         self.eos_token = torch.tensor([t_trg.token_to_id(EOS)], dtype=torch.int64)
         self.pad_token = torch.tensor([t_trg.token_to_id(PAD)], dtype=torch.int64)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.ds)
 
     def __getitem__(self, idx: Any) -> Any:
@@ -117,14 +114,14 @@ class Dataset3(Dataset):
             "tgt_text": tgt_text,
         }
 
-    def nopeak_mask(self, size):
+    def nopeak_mask(self, size: int) -> Tensor:
         np_mask = np.triu(np.ones((1, size, size)), k=1).astype("uint8")
-        np_mask = Variable(torch.from_numpy(np_mask == 0))
-        return np_mask
+        return torch.from_numpy(np_mask == 0)
 
-    def create_masks(self, src, trg):
+    def create_masks(self, src: Tensor, trg: Tensor | None) -> tuple[Tensor, Tensor | None]:
         src_mask = (src != self.pad_token).unsqueeze(-2)
 
+        trg_mask: Tensor | None
         if trg is not None:
             trg_mask = (trg != self.pad_token).unsqueeze(-2)
             size = trg.size(1)  # get seq_len for matrix
@@ -144,14 +141,14 @@ class Dataset3(Dataset):
     #     opt.trg_pad = TRG.vocab.stoi['<pad>']
 
 
-def get_all_sentences3(ds, lang):
+def get_all_sentences3(ds: Any, lang: str) -> Iterator[str]:
     for item in ds:
         yield item[lang]
 
 
 # Migrating to Vocab and get_tokenizer did not seem to be worth it.
 # Using the HuggingFace Tokenizer instead
-def get_or_build_tokenizer3(config: dict, model_folder: str, ds, lang: str) -> Tokenizer:
+def get_or_build_tokenizer3(config: ConfigDict, model_folder: str, ds: Any, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         tokenizer = Tokenizer(WordLevel(unk_token=UNK))
@@ -164,7 +161,7 @@ def get_or_build_tokenizer3(config: dict, model_folder: str, ds, lang: str) -> T
     return tokenizer
 
 
-def get_tokenizer3(config: dict, model_folder: str, lang: str) -> Tokenizer:
+def get_tokenizer3(config: ConfigDict, model_folder: str, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
@@ -174,7 +171,7 @@ def get_tokenizer3(config: dict, model_folder: str, lang: str) -> Tokenizer:
     return tokenizer
 
 
-def get_ds3(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
+def get_ds3(config: ConfigDict, model_folder: str) -> tuple[DataLoader[Any], DataLoader[Any], Tokenizer, Tokenizer]:
     # load_dataset(path, name, split=)
     ds_raw = load_dataset(
         "csv", data_files=f"custom_datasets/{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}/dataset.csv", sep="|", split="train"
@@ -210,7 +207,7 @@ def get_ds3(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, To
     return train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt
 
 
-def get_testing_ds3(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:
+def get_testing_ds3(config: ConfigDict, model_folder: str, sentence: str) -> tuple[str, str, Tokenizer, Tokenizer]:
 
     # build tokenizers
     tokenizer_src = get_tokenizer3(config, model_folder, config["lang_src"])

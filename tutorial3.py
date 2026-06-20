@@ -1,18 +1,21 @@
 # The source code seems to be [here](https://github.com/SamLynnEvans/Transformer?ref=blog.floydhub.com)
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
+import numpy as np
 import torch
 import torch.nn as nn
 from tokenizers import Tokenizer
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm import tqdm
 
-from config import EOS, PAD, get_console_width, get_device, get_model_folder, get_config
+from config import EOS, PAD, ConfigDict, get_config, get_console_width, get_device, get_model_folder
 from dataset3 import get_ds3, get_testing_ds3
 from model3 import Transformer3, build_transformer3
-from utils import collect_training_metrics, reload_model, save_model, load_trained_model
+from utils import collect_training_metrics, load_trained_model, reload_model, save_model
 
 
 class CosineWithRestarts(torch.optim.lr_scheduler._LRScheduler):
@@ -44,9 +47,9 @@ class CosineWithRestarts(torch.optim.lr_scheduler._LRScheduler):
         self._cycle_factor: float = 1.0
         self._updated_cycle_len: int = T_max
         self._initialized: bool = False
-        super(CosineWithRestarts, self).__init__(optimizer, last_epoch)
+        super().__init__(optimizer, last_epoch)
 
-    def get_lr(self):
+    def get_lr(self) -> list[float]:
         """Get updated learning rate."""
         # HACK: We need to check if this is the first time get_lr() was called, since
         # we want to start with step = 0, but _LRScheduler calls get_lr with
@@ -73,7 +76,7 @@ class CosineWithRestarts(torch.optim.lr_scheduler._LRScheduler):
         return lrs
 
 
-def build_model3(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer3:
+def build_model3(config: ConfigDict, vocab_src_len: int, vocab_tgt_len: int) -> Transformer3:
     model = build_transformer3(
         vocab_src_len,
         vocab_tgt_len,
@@ -89,22 +92,22 @@ def build_model3(config: dict, vocab_src_len: int, vocab_tgt_len: int) -> Transf
 
 def evaluate_model3(
     model: Transformer3,
-    validation_ds: DataLoader,
+    validation_ds: DataLoader[Any],
     tokenizer_src: Tokenizer,
     tokenizer_tgt: Tokenizer,
     max_len: int,
-    device,
-    print_msg,
+    device: str,
+    print_msg: Callable[[str], None],
     global_step: int,
-    writer,
+    writer: SummaryWriter | None,
     num_examples: int = 2,
-):
+) -> None:
     model.eval()
     count = 0
 
     source_texts = []
     expected = []
-    predicted = []
+    predicted: list[str] = []
 
     console_width = get_console_width()
 
@@ -112,25 +115,26 @@ def evaluate_model3(
         for batch in validation_ds:
             count += 1
             encoder_input = batch["src"].to(device)
-            encoder_mask = batch["src_mask"].to(device)
 
             assert encoder_input.size(0) == 1, "Batch size must be 1 for validation"
 
+            # JEB: Transformer3 has no greedy_decode helper yet, so autoregressive
+            # validation is disabled. The previous code referenced an undefined
+            # `model_out` (the greedy_decode call below is commented out), which
+            # would raise NameError if this function were ever invoked.
             # model_out = greedy_decode(model, encoder_input, encoder_mask, tokenizer_src, tokenizer_tgt, max_len, device)
+            # model_out_text = tokenizer_tgt.decode(model_out.detach().cpu().numpy())
 
             source_text = batch["src_text"][0]
             target_text = batch["tgt_text"][0]
-            model_out_text = tokenizer_tgt.decode(model_out.detach().cpu().numpy())
 
             source_texts.append(source_text)
             expected.append(target_text)
-            predicted.append(model_out_text)
 
             # Print the message to the console without interfering with the progress bar
             print_msg("-" * console_width)
             print_msg(f"{'SOURCE: ':>12}{source_text}")
             print_msg(f"{'TARGET: ':>12}{target_text}")
-            print_msg(f"{'PREDICTED: ':>12}{model_out_text}")
 
             if count == num_examples:
                 print_msg("-" * console_width)
@@ -139,21 +143,24 @@ def evaluate_model3(
         collect_training_metrics(writer, predicted, expected, global_step)
 
 
-def train_model3(config: dict):
+def train_model3(config: ConfigDict) -> None:
     device = get_device()
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds3(config, model_folder)
+    # val_dataloader is unused: validation is disabled for model3 (see evaluate_model3).
+    train_dataloader, _val_dataloader, tokenizer_src, tokenizer_tgt = get_ds3(config, model_folder)
     model = build_model3(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=config["lr"], betas=(0.9, 0.98), eps=1e-9)
-    if False:
-        scheduler = CosineWithRestarts(opt.optimizer, T_max=opt.train_len)
+    # JEB: Optional cosine scheduler with restarts; disabled. The original code
+    # referenced an undefined `opt` object, so it could never have run.
+    # scheduler = CosineWithRestarts(optimizer, T_max=config["num_epochs"])
 
-    # Tensorboard
-    writer = SummaryWriter(get_model_folder(config) + "/" + config["experiment_name"])
+    # Tensorboard: created for the run directory side effect; this training loop
+    # does not yet log scalars or run validation, so the handle is otherwise unused.
+    _writer = SummaryWriter(get_model_folder(config) + "/" + config["experiment_name"])
 
     initial_epoch = 0
     global_step = 0
@@ -178,7 +185,8 @@ def train_model3(config: dict):
             trg = batch["trg"].to(device)  # (B, SeqLen)
             src_mask = batch["src_mask"].to(device)  # (B, 1, 1, SeqLen)
             trg_mask = batch["trg_mask"].to(device)  # (B, 1, SeqLen, SeqLen)
-            label = batch["label"].to(device)  # (B, SeqLen)
+            # JEB: model3 supervises against trg (see ys below), not the separate
+            # "label" tensor used by model1, so batch["label"] is intentionally unused.
 
             # src = batch.src.transpose(0, 1).to(device)
             # trg = batch.trg.transpose(0, 1).to(device)
@@ -211,7 +219,7 @@ def train_model3(config: dict):
                 batch_iterator.write("-" * console_width)
                 batch_iterator.write(f"{'Source: ':>15}{batch['src_text'][0]}")
                 batch_iterator.write(f"{'Target: ':>15}{batch['tgt_text'][0]}")
-                kn_sentence_predicted = torch.argmax(preds[0], axis=1)
+                kn_sentence_predicted = torch.argmax(preds[0], dim=1)
                 # JEB: Figure out how to get decode to stop at eos
                 # predicted_sentence = tokenizer_tgt.decode(kn_sentence_predicted.detach().cpu().numpy(), skip_special_tokens=True)
                 predicted_words = []
@@ -229,14 +237,15 @@ def train_model3(config: dict):
         save_model(config, model, optimizer, epoch, global_step)
 
 
-def translate3(config: dict, sentence: str):
+def translate3(config: ConfigDict, sentence: str) -> None:
     device = get_device()
 
     model_folder = get_model_folder(config)
     if not Path.exists(Path(model_folder)):
         raise ValueError(f"{model_folder} model_folder does not exist")
 
-    sentence, label, tokenizer_src, tokenizer_tgt = get_testing_ds3(config, model_folder, sentence)
+    # _label is unused while run_translation below stays disabled (model3 has no decode helper).
+    sentence, _label, tokenizer_src, tokenizer_tgt = get_testing_ds3(config, model_folder, sentence)
     model = build_model3(config, tokenizer_src.get_vocab_size(), tokenizer_tgt.get_vocab_size()).to(device)
 
     # Load the pretrained weights
@@ -246,7 +255,7 @@ def translate3(config: dict, sentence: str):
     # run_translation(label, sentence, model, tokenizer_src, tokenizer_tgt, config['seq_len'], device)
 
 
-def debug_code_model3(config: dict, device):
+def debug_code_model3(config: ConfigDict, device: str) -> None:
     config["model"] = "model3"
     config["datasource"] = "translate"
     config["lang_src"] = "en"
@@ -255,8 +264,8 @@ def debug_code_model3(config: dict, device):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    # train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds1(config, model_folder)
-    train_dataloader, val_dataloader, tokenizer_src, tokenizer_tgt = get_ds3(config, model_folder)
+    # Smoke-test the data pipeline; the debug model below uses fixed vocab sizes.
+    _ = get_ds3(config, model_folder)
     model = build_model3(config, 500, 500).to(device)
 
     print(model)
