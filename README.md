@@ -164,14 +164,22 @@ Notes:
 First end-to-end reference run, to anchor comparative benchmarks. Config: d_model=256, N=3,
 h=4, seq_len=350, batch_size=8, 23 epochs, 3638 steps/epoch.
 
-| Hardware | Backend | it/s | sec/epoch | Total (23 ep) | Final loss (ep 22) |
-|----------|---------|------|-----------|---------------|--------------------|
-| Mac mini M4 Pro | mps | ~8.5 | ~425 | _in progress_ | _in progress_ |
+| Hardware | Backend | it/s | sec/epoch | Total (23 ep) | Final loss |
+|----------|---------|------|-----------|---------------|------------|
+| Mac mini M4 Pro | mps | ~8.5 | ~427 | ~2h45m | ~2.8 (ep22) |
 | GTX 1660 (6 GB), WSL2 | cuda | ~6.5 | _tbd_ | _tbd_ | _tbd_ |
 
-Loss trajectory (M4, end-of-epoch): 10.0 → 7.6 (ep0) → ~3.0 (ep16), still descending.
-_This table is finalized once the first full run completes; CUDA-side numbers fill in as
-they're measured._
+Loss trajectory (M4, end-of-epoch): 10.0 → 6.0 (ep0) → ~3.5 (ep14) → ~2.8 (ep20–22).
+_CUDA-side numbers fill in as they're measured._
+
+**Inference sanity check** (`translate.py -m opus_books_en_it_model1`, on `tmodel_22.pt`):
+
+```
+Source: She opened the door and looked at the garden.
+Pred:   Ella aprì la porta e guardò il giardino.       # ✅ essentially correct
+Source: I am not a very good student.
+Pred:   Io non sono stato messo in persona di privato.  # rougher — 23 epochs is light
+```
 
 ## Checkpoint portability (macOS arm64 ↔ WSL amd64)
 
