@@ -1,9 +1,11 @@
 # Builld a GPT from scratch [video][https://youtu.be/kCc8FmEb1nY]
 
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
 
 
 class PositionalEncoding(nn.Module):
@@ -22,8 +24,8 @@ class PositionalEncoding(nn.Module):
         >>> pos_encoder = PositionalEncoding(d_model)
     """
 
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
-        super(PositionalEncoding, self).__init__()
+    def __init__(self, d_model: int, dropout: float = 0.1, max_len: int = 5000) -> None:
+        super().__init__()
         self.dropout = nn.Dropout(p=dropout)
 
         pe = torch.zeros(max_len, d_model)
@@ -34,7 +36,7 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0).transpose(0, 1)
         self.register_buffer("pe", pe)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         r"""Inputs of forward function
         Args:
             x: the sequence fed to the positional encoder model (required).
@@ -52,10 +54,10 @@ class PositionalEncoding(nn.Module):
 class Transformer4(nn.Transformer):
     """Container module with an encoder, a recurrent or transformer module, and a decoder."""
 
-    def __init__(self, ntoken, ninp, nhead, nhid, nlayers, dropout=0.5):
+    def __init__(self, ntoken: int, ninp: int, nhead: int, nhid: int, nlayers: int, dropout: float = 0.5) -> None:
         super().__init__(d_model=ninp, nhead=nhead, dim_feedforward=nhid, num_encoder_layers=nlayers)
         self.model_type = "Transformer"
-        self.src_mask = None
+        self.src_mask: Tensor | None = None
         self.pos_encoder = PositionalEncoding(ninp, dropout)
 
         self.input_emb = nn.Embedding(ntoken, ninp)
@@ -64,18 +66,23 @@ class Transformer4(nn.Transformer):
 
         self.init_weights()
 
-    def _generate_square_subsequent_mask(self, sz):
+    def _generate_square_subsequent_mask(self, sz: int) -> Tensor:
         mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-        mask = mask.float().masked_fill(mask == 0, float("-inf")).masked_fill(mask == 1, float(0.0))
+        mask = mask.float().masked_fill(mask == 0, float("-inf")).masked_fill(mask == 1, 0.0)
         return mask
 
-    def init_weights(self):
+    def init_weights(self) -> None:
         initrange = 0.1
         nn.init.uniform_(self.input_emb.weight, -initrange, initrange)
         nn.init.zeros_(self.decoder.bias)
         nn.init.uniform_(self.decoder.weight, -initrange, initrange)
 
-    def forward(self, src, has_mask=True):
+    # JEB: This is a decoder-only (GPT-style) language model, so its forward takes a
+    # single source sequence plus a mask flag. That intentionally diverges from the
+    # encoder/decoder signature of nn.Transformer.forward(src, tgt, ...), which we do
+    # not use here. We must keep the method name "forward" so nn.Module.__call__ still
+    # dispatches model(src) correctly; hence the documented [override] ignore.
+    def forward(self, src: Tensor, has_mask: bool = True) -> Tensor:  # type: ignore[override]
         if has_mask:
             device = src.device
             if self.src_mask is None or self.src_mask.size(0) != len(src):
