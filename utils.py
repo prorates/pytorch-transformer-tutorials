@@ -8,7 +8,7 @@ import torchmetrics.text
 from torch import nn
 from torch.optim import Optimizer
 
-from config import ConfigDict, get_best_model_params_path, get_weights_file_path, latest_weights_file_path
+from config import ConfigDict, get_best_model_params_path, get_device, get_weights_file_path, latest_weights_file_path
 
 
 def collect_training_metrics(writer: Any, predicted: list[str], expected: list[str], global_step: int) -> None:
@@ -40,7 +40,11 @@ def reload_model[ModelT: nn.Module, OptimT: Optimizer](
     model_filename = latest_weights_file_path(config) if preload == "latest" else get_weights_file_path(config, preload) if preload else None
     if model_filename:
         print(f"Preloading model {model_filename}")
-        state = torch.load(model_filename)
+        # map_location remaps tensors saved on another backend (e.g. an MPS checkpoint
+        # from a Mac) onto this machine's device, so checkpoints are portable across
+        # macOS/arm64 (MPS), CUDA, and CPU. Without it, torch.load tries to restore to
+        # the original device and raises if that backend isn't available here.
+        state = torch.load(model_filename, map_location=get_device())
         model.load_state_dict(state["model_state_dict"])  # JEB: This was not in the vide
         initial_epoch = state["epoch"] + 1
         optimizer.load_state_dict(state["optimizer_state_dict"])
@@ -70,7 +74,8 @@ def load_trained_model[ModelT: nn.Module](config: ConfigDict, model: ModelT) -> 
     model_filename = latest_weights_file_path(config) if preload == "latest" else get_weights_file_path(config, preload) if preload else None
     print(f"Preloading model {model_filename}")
     if model_filename:
-        state = torch.load(model_filename)
+        # map_location keeps checkpoints portable across backends (MPS/CUDA/CPU) — see reload_model.
+        state = torch.load(model_filename, map_location=get_device())
         model.load_state_dict(state["model_state_dict"])  # JEB: This was not in the video
     else:
         raise ValueError(f"{model_filename} Pretrained Model does not exist")
