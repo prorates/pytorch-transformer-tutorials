@@ -1,21 +1,25 @@
 # This is based on the following [video](https://www.youtube.com/playlist?list=PLTl9hO2Oobd97qfWC40gOSU8C0iu0m2l4)
 # The code is original code is available [here](https://github.com/ajhalthor/Transformer-Neural-Network)
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard.writer import SummaryWriter
 from tqdm import tqdm
 
-from config import EOS, PAD, get_console_width, get_device, get_model_folder, get_config
+from config import EOS, PAD, ConfigDict, get_config, get_console_width, get_device, get_model_folder
 from dataset6 import Dataset6, get_ds6, get_testing_ds6
 from model6 import Transformer6, build_transformer6
-from utils import collect_training_metrics, reload_model, save_model, load_trained_model
+from utils import collect_training_metrics, load_trained_model, reload_model, save_model
 
 
-def build_model6(config: dict, vocab_src_len: int, vocab_tgt_len: int, src_to_index: dict, tgt_to_index: dict) -> Transformer6:
+def build_model6(
+    config: ConfigDict, vocab_src_len: int, vocab_tgt_len: int, src_to_index: dict[str, int], tgt_to_index: dict[str, int]
+) -> Transformer6:
     model = build_transformer6(
         vocab_src_len,
         vocab_tgt_len,
@@ -33,7 +37,7 @@ def build_model6(config: dict, vocab_src_len: int, vocab_tgt_len: int, src_to_in
     return model
 
 
-def train_model6(config: dict):
+def train_model6(config: ConfigDict) -> None:
     device = get_device()
 
     model_folder = get_model_folder(config)
@@ -47,7 +51,6 @@ def train_model6(config: dict):
 
     optimizer = torch.optim.Adam(transformer.parameters(), lr=config["lr"])
 
-    total_loss = 0
     initial_epoch = 0
     global_step = 0
 
@@ -101,7 +104,7 @@ def train_model6(config: dict):
                 batch_iterator.write("-" * console_width)
                 batch_iterator.write(f"{'Source: ':>15}{src_batched_sentences[0]}")
                 batch_iterator.write(f"{'Target: ':>15}{tgt_batched_sentences[0]}")
-                kn_sentence_predicted = torch.argmax(predicted_tokens[0], axis=1)
+                kn_sentence_predicted = torch.argmax(predicted_tokens[0], dim=1)
                 predicted_sentence = ""
                 for idx in kn_sentence_predicted:
                     if idx == tgt_to_index[EOS]:
@@ -115,15 +118,23 @@ def train_model6(config: dict):
             #                     config['seq_len'], device, lambda msg: batch_iterator.write(msg), global_step, writer)
 
         # Run validation at the end of each epoch
-        evaluate_model6(transformer, val_dataloader, index_to_tgt, config["seq_len"], device, lambda msg: batch_iterator.write(msg), global_step, writer)
+        evaluate_model6(transformer, val_dataloader, index_to_tgt, config["seq_len"], device, batch_iterator.write, global_step, writer)
 
         # Save the model at the end of every epoch
         save_model(config, transformer, optimizer, epoch, global_step)
 
 
 def evaluate_model6(
-    transformer: Transformer6, validation_ds: DataLoader, index_to_tgt: dict, max_len: int, device, print_msg, global_step: int, writer, num_examples: int = 2
-):
+    transformer: Transformer6,
+    validation_ds: DataLoader[Any],
+    index_to_tgt: dict[int, str],
+    max_len: int,
+    device: str,
+    print_msg: Callable[[str], None],
+    global_step: int,
+    writer: SummaryWriter | None,
+    num_examples: int = 2,
+) -> None:
 
     transformer.eval()
     count = 0
@@ -161,7 +172,7 @@ def evaluate_model6(
         collect_training_metrics(writer, predicted, expected, global_step)
 
 
-def translate6(config: dict, sentence: str):
+def translate6(config: ConfigDict, sentence: str) -> str:
     device = get_device()
 
     model_folder = get_model_folder(config)
@@ -190,7 +201,7 @@ def translate6(config: dict, sentence: str):
     return output_text
 
 
-def debug_code_model6(config: dict, device):
+def debug_code_model6(config: ConfigDict, device: str) -> None:
     config["model"] = "model6"
     config["datasource"] = "translate"
     config["lang_src"] = "en"
@@ -199,7 +210,7 @@ def debug_code_model6(config: dict, device):
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)
 
-    train_dataloader, val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index, index_to_tgt = get_ds6(config, model_folder)
+    _train_dataloader, _val_dataloader, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index, _index_to_tgt = get_ds6(config, model_folder)
     model = build_model6(config, src_vocab_size, tgt_vocab_size, src_to_index, tgt_to_index).to(device)
 
     print(model)

@@ -1,24 +1,20 @@
 # This is based on the following [video](https://www.youtube.com/playlist?list=PLTl9hO2Oobd97qfWC40gOSU8C0iu0m2l4)
 # The code is original code is available [here](https://github.com/ajhalthor/Transformer-Neural-Network)
 
-import torch
-from torch import Tensor
-from torch.utils.data import Dataset, DataLoader, random_split
-from torch.autograd import Variable
+from collections.abc import Iterator
+from pathlib import Path
 from typing import Any
 
-from typing import Tuple
-
-from datasets import load_dataset
-from tokenizers import Tokenizer, pre_tokenizers, decoders
-from tokenizers.models import BPE
-from tokenizers.trainers import BpeTrainer
-from tokenizers.pre_tokenizers import ByteLevel, Whitespace
-
-from pathlib import Path
-from config import EOS, SOS, PAD, UNK
 import numpy as np
-import codecs
+import torch
+from tokenizers import Tokenizer
+from tokenizers.models import BPE
+from tokenizers.pre_tokenizers import Whitespace
+from tokenizers.trainers import BpeTrainer
+from torch import Tensor
+from torch.utils.data import DataLoader, Dataset, random_split
+
+from config import EOS, PAD, SOS, UNK, ConfigDict
 
 # Generated this by filtering Appendix code
 
@@ -138,9 +134,9 @@ kannada_vocabulary = [
     "ೖ",
     "ೞ",
     "ೣ",
-    "ಂ",
+    "ಂ",  # noqa: RUF001  # genuine KANNADA SIGN ANUSVARA, part of the vocabulary
     "ಃ",
-    "೦",
+    "೦",  # noqa: RUF001  # genuine KANNADA DIGIT ZERO, part of the vocabulary
     "೧",
     "೨",
     "೩",
@@ -231,29 +227,29 @@ english_vocabulary = [
 NEG_INFTY = -1e9
 
 
-class Dataset6Tmp(Dataset):
+class Dataset6Tmp(Dataset[Any]):
 
-    def __init__(self, src_sentences: list[str], tgt_sentences: list[str]):
+    def __init__(self, src_sentences: list[str], tgt_sentences: list[str]) -> None:
         self.src_sentences = src_sentences
         self.tgt_sentences = tgt_sentences
 
     def __len__(self) -> int:
         return len(self.src_sentences)
 
-    def __getitem__(self, idx: int) -> Tuple[str, str]:
+    def __getitem__(self, idx: int) -> tuple[str, str]:
         return self.src_sentences[idx], self.tgt_sentences[idx]
 
-    def is_valid_tokens(self, sentence: str, vocab: dict):
+    def is_valid_tokens(self, sentence: str, vocab: dict[str, Any]) -> bool:
         for token in list(set(sentence)):
             if token not in vocab:
                 print(bytes(token, "utf-8"))
                 return False
         return True
 
-    def is_valid_length(self, sentence: str, max_sequence_length: int):
+    def is_valid_length(self, sentence: str, max_sequence_length: int) -> bool:
         return len(list(sentence)) < (max_sequence_length - 1)  # need to re-add the end token so leaving 1 space
 
-    def detect_valid_sentence(self, max_len: int, src_vocab: dict, tgt_vocab: dict):
+    def detect_valid_sentence(self, max_len: int, src_vocab: dict[str, Any], tgt_vocab: dict[str, Any]) -> list[int]:
         valid_sentence_indicies = []
         for index in range(len(self.tgt_sentences)):
             tgt_sentence, src_sentence = self.tgt_sentences[index], self.src_sentences[index]
@@ -267,26 +263,26 @@ class Dataset6Tmp(Dataset):
                 pass
         return valid_sentence_indicies
 
-    def extract_sentences(self, valid_sentence_indicies: list, tgt: bool):
+    def extract_sentences(self, valid_sentence_indicies: list[int], tgt: bool) -> list[str]:
         if tgt:
             return [self.tgt_sentences[i] for i in valid_sentence_indicies]
         else:
             return [self.src_sentences[i] for i in valid_sentence_indicies]
 
 
-class Dataset6(Dataset):
+class Dataset6(Dataset[Any]):
 
-    def __init__(self, ds: Dataset6Tmp):
+    def __init__(self, ds: Dataset[Any]) -> None:
         self.ds = ds
 
     def __len__(self) -> int:
-        return len(self.ds)
+        return len(self.ds)  # type: ignore[arg-type]  # Dataset has no __len__ in stubs, but ds always does here
 
-    def __getitem__(self, idx: int) -> Tuple[str, str]:
+    def __getitem__(self, idx: int) -> tuple[str, str]:
         return self.ds[idx]
 
     @staticmethod
-    def create_masks(eng_batch: tuple[str], kn_batch: tuple[str], seq_len: int) -> Tuple[Tensor, Tensor, Tensor]:
+    def create_masks(eng_batch: tuple[str, ...], kn_batch: tuple[str, ...], seq_len: int) -> tuple[Tensor, Tensor, Tensor]:
         batch_size = len(eng_batch)
         # Create a tensor (SeqLen, SeqLen). Cell above the diagonals are set to True, cell bellow to 0.
         look_ahead_mask = torch.full([seq_len, seq_len], True)  # (SeqLen, SeqLen)
@@ -335,12 +331,12 @@ class Dataset6(Dataset):
         return encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask
 
 
-def get_all_sentences6(ds, lang_idx):
-    for item in ds:
-        yield item[lang_idx]
+def get_all_sentences6(ds: Dataset6Tmp, lang_idx: int) -> Iterator[str]:
+    for idx in range(len(ds)):
+        yield ds[idx][lang_idx]
 
 
-def get_or_build_tokenizer6(config: dict, model_folder: str, ds, lang: str) -> Tokenizer:
+def get_or_build_tokenizer6(config: ConfigDict, model_folder: str, ds: Dataset6Tmp, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         tokenizer = Tokenizer(BPE(char_level=True, unk_token=UNK))
@@ -356,7 +352,7 @@ def get_or_build_tokenizer6(config: dict, model_folder: str, ds, lang: str) -> T
     return tokenizer
 
 
-def get_tokenizer6(config: dict, model_folder: str, lang: str) -> Tokenizer:
+def get_tokenizer6(config: ConfigDict, model_folder: str, lang: str) -> Tokenizer:
     tokenizer_path = Path(model_folder + "/" + config["tokenizer_file"].format(lang) + ".json")
     if not Path.exists(tokenizer_path):
         print(f"Tokenizer does not exists {tokenizer_path}")
@@ -366,16 +362,16 @@ def get_tokenizer6(config: dict, model_folder: str, lang: str) -> Tokenizer:
     return tokenizer
 
 
-# def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
+# def get_ds6(config: ConfigDict, model_folder: str) -> tuple[DataLoader, DataLoader, Tokenizer, Tokenizer]:
 
 
-def load_custom_dataset(config: dict, model_folder: str) -> Dataset6Tmp:
+def load_custom_dataset(config: ConfigDict, model_folder: str) -> Dataset6Tmp:
     src_file = f"custom_datasets/{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}/{config['lang_src']}.txt"
     tgt_file = f"custom_datasets/{config['datasource']}_{config['lang_src']}_{config['lang_tgt']}/{config['lang_tgt']}.txt"
 
-    with open(src_file, "r") as file:
+    with open(src_file) as file:
         src_sentences = file.readlines()
-    with open(tgt_file, "r") as file:
+    with open(tgt_file) as file:
         tgt_sentences = file.readlines()
 
     # Limit Number of sentences
@@ -389,7 +385,7 @@ def load_custom_dataset(config: dict, model_folder: str) -> Dataset6Tmp:
     return full_ds
 
 
-def filter_custom_dataset(config: dict, full_ds: Dataset6Tmp, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer) -> Dataset6Tmp:
+def filter_custom_dataset(config: ConfigDict, full_ds: Dataset6Tmp, tokenizer_src: Tokenizer, tokenizer_tgt: Tokenizer) -> Dataset6Tmp:
 
     valid_sentence_indicies = full_ds.detect_valid_sentence(config["seq_len"], tokenizer_src.get_vocab(), tokenizer_tgt.get_vocab())
 
@@ -403,7 +399,9 @@ def filter_custom_dataset(config: dict, full_ds: Dataset6Tmp, tokenizer_src: Tok
     return filtered_ds
 
 
-def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, int, int, dict, dict, dict]:
+def get_ds6(
+    config: ConfigDict, model_folder: str
+) -> tuple[DataLoader[Any], DataLoader[Any], int, int, dict[str, Any], dict[str, Any], dict[Any, Any]]:
 
     full_ds = load_custom_dataset(config, model_folder)
     tokenizer_src = get_or_build_tokenizer6(config, model_folder, full_ds, config["lang_src"])
@@ -435,14 +433,16 @@ def get_ds6(config: dict, model_folder: str) -> Tuple[DataLoader, DataLoader, in
     )
 
 
-def get_testing_ds6(config: dict, model_folder: str, sentence: str) -> Tuple[str, str, Tokenizer, Tokenizer]:
+def get_testing_ds6(
+    config: ConfigDict, model_folder: str, sentence: str
+) -> tuple[str, str | None, int, int, dict[str, Any], dict[str, Any], dict[Any, Any]]:
 
     # build tokenizers
     tokenizer_src = get_tokenizer6(config, model_folder, config["lang_src"])
     tokenizer_tgt = get_tokenizer6(config, model_folder, config["lang_tgt"])
     index_to_tgt = {v: k for i, (k, v) in enumerate(tokenizer_tgt.get_vocab().items())}
 
-    label = None
+    label: str | None = None
     if isinstance(sentence, int) or sentence.isdigit():
         id = int(sentence)
         ds = load_custom_dataset(config, model_folder)
