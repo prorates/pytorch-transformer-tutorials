@@ -159,6 +159,48 @@ Notes:
   ~2.6/6 GB here) amortizes launch overhead better at larger batches — raising `batch_size`
   typically improves its it/s.
 
+### Full-run benchmark (model1, opus_books en→it)
+
+First end-to-end reference run, to anchor comparative benchmarks. Config: d_model=256, N=3,
+h=4, seq_len=350, batch_size=8, 23 epochs, 3638 steps/epoch.
+
+| Hardware | Backend | it/s | sec/epoch | Total (23 ep) | Final loss |
+|----------|---------|------|-----------|---------------|------------|
+| Mac mini M4 Pro | mps | ~8.5 | ~427 | ~2h45m | ~2.8 (ep22) |
+| GTX 1660 (6 GB), WSL2 | cuda | ~6.5 | _tbd_ | _tbd_ | _tbd_ |
+
+Loss trajectory (M4, end-of-epoch): 10.0 → 6.0 (ep0) → ~3.5 (ep14) → ~2.8 (ep20–22).
+_CUDA-side numbers fill in as they're measured._
+
+**Inference sanity check** (`translate.py -m opus_books_en_it_model1`, on `tmodel_22.pt`):
+
+```
+Source: She opened the door and looked at the garden.
+Pred:   Ella aprì la porta e guardò il giardino.       # ✅ essentially correct
+Source: I am not a very good student.
+Pred:   Io non sono stato messo in persona di privato.  # rougher — 23 epochs is light
+```
+
+## Checkpoint portability (macOS arm64 ↔ WSL amd64)
+
+PyTorch `.pt` checkpoints are **architecture- and backend-portable** — a model trained on a
+Mac (MPS) loads on a CUDA/WSL box and vice versa. **No ONNX conversion is needed** for
+PyTorch-to-PyTorch use; ONNX is only for running outside PyTorch. `save_model` stores a
+plain state-dict (tensors only, no pickled class), and `reload_model` / `load_trained_model`
+pass `map_location=get_device()` so tensors are remapped onto the loading machine's backend.
+
+To move a model between machines, copy the **entire run folder** — the `.pt` carries weights
+only:
+
+```
+opus_books_en_it_model1/
+├── config.yaml        # architecture dims — must match
+├── tokenizer_*.json   # vocab size — must match (don't rebuild)
+└── tmodel_*.pt        # weights
+```
+
+A `config.yaml` or tokenizer mismatch causes a `load_state_dict` shape error.
+
 ## Tutorial sources
 
 Each model's original source is linked in [the table above](#the-eight-implementations).

@@ -95,6 +95,16 @@ Paths are derived entirely from config by `config.py`:
 
 `latest_weights_file_path()` finds the newest `tmodel_*` for resume/inference.
 
+**Checkpoints are backend-portable.** `save_model` stores only a plain dict
+(`model_state_dict` tensors + optimizer state + epoch/step) — no pickled model class — so a
+`.pt` trained on macOS/arm64 (MPS) loads on CUDA or CPU and vice versa; no ONNX conversion
+is needed for PyTorch-to-PyTorch use. `reload_model` / `load_trained_model` pass
+`map_location=get_device()` to `torch.load` so tensors saved on one backend are remapped to
+the loading machine's device (without it, `torch.load` tries to restore to the original
+device and raises if that backend is absent). To move a model between machines, copy the
+**whole run folder** — the `.pt` carries weights only, so the matching `config.yaml`
+(architecture dims) and `tokenizer_*.json` (vocab size) must travel with it.
+
 ## Runtime & platform
 
 - **Device:** chosen by `get_device()`; CUDA-only calls (e.g. `torch.cuda.empty_cache()`)
