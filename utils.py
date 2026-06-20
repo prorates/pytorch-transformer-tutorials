@@ -44,7 +44,10 @@ def reload_model[ModelT: nn.Module, OptimT: Optimizer](
         # from a Mac) onto this machine's device, so checkpoints are portable across
         # macOS/arm64 (MPS), CUDA, and CPU. Without it, torch.load tries to restore to
         # the original device and raises if that backend isn't available here.
-        state = torch.load(model_filename, map_location=get_device())
+        # weights_only=False is required: these checkpoints hold optimizer state and
+        # ints (epoch/global_step), not just tensors. Set explicitly since torch will
+        # flip the default to True in a future release, which would break this load.
+        state = torch.load(model_filename, map_location=get_device(), weights_only=False)
         model.load_state_dict(state["model_state_dict"])  # JEB: This was not in the vide
         initial_epoch = state["epoch"] + 1
         optimizer.load_state_dict(state["optimizer_state_dict"])
@@ -75,7 +78,9 @@ def load_trained_model[ModelT: nn.Module](config: ConfigDict, model: ModelT) -> 
     print(f"Preloading model {model_filename}")
     if model_filename:
         # map_location keeps checkpoints portable across backends (MPS/CUDA/CPU) — see reload_model.
-        state = torch.load(model_filename, map_location=get_device())
+        # weights_only=False: set explicitly (torch will flip the default to True), since the
+        # checkpoint dict contains non-tensor objects (optimizer state, epoch/global_step ints).
+        state = torch.load(model_filename, map_location=get_device(), weights_only=False)
         model.load_state_dict(state["model_state_dict"])  # JEB: This was not in the video
     else:
         raise ValueError(f"{model_filename} Pretrained Model does not exist")
