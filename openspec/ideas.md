@@ -27,3 +27,17 @@ Lightweight backlog for this repo. Captures ideas before they become OpenSpec ch
 ## Archived ideas — by capability
 
 <!-- condensed bullets grouped under capability headings; filled by /alemax:archive-ideas -->
+
+### Code quality
+
+- [x] **ruff + mypy baseline + bug sweep** (PR #6, 2026-06-19) — brought common code + model1–8 to a clean ruff + pragmatic-strict mypy baseline (`pyproject.toml` tooling config; `model5.py` vendored copy and `custom_datasets/`/notebooks excluded). The sweep surfaced ~15 real bugs:
+  - `model1.py`: non-in-place `masked_fill` → attention mask silently never applied
+  - `tutorial1.py`: `sos_idx`/`eos_idx` passed swapped into `greedy_decode`
+  - `tutorial3.py`: `np.cos`/`np.pi` used but numpy never imported (NameError)
+  - `tutorial5.py`: typo `to5enizer_src` left `tokenizer_src` undefined
+  - `tutorial8.py`: unpacked 6 values from a 5-tuple; `config["model"]="model7"` copy-paste
+  - `model6.py`: vocab dict + SOS/EOS/PAD mis-annotated `int` (str keys / `dict[str,int]`)
+  - `model7.py`: implicit-Optional `src_mask`; wrong `IterableDataset` type; float `StepLR.step_size`
+  - `tutorial2.py`/`tutorial3.py`: `evaluate_*` referenced undefined `model_out` (decode commented out)
+  - assorted: `argmax(axis=)`→`dim=`, loss accumulators typed `int` while holding floats
+  - side effects: `train.py` now wires model7 into dispatch (was an un-imported function → undefined name); `reload_model`/`load_trained_model` are now PEP 695 generic so callers keep concrete types
