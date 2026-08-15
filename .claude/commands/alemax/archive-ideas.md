@@ -9,16 +9,17 @@ tags: [workflow, openspec, alemax, reshape]
 
 ## Governance preamble (run BEFORE any other step)
 
-This command mutates `openspec/ideas.md` and adds files under `openspec/ideas-snapshots/`. Both are canonical-only — mutations land via a feature branch + PR, never as direct commits to fork main. The skill handles the branching internally.
+This command mutates `openspec/ideas.md` and adds files under `openspec/ideas-snapshots/`. It is **context-adaptive** and the skill handles the branching internally:
+- **In the claude-meta meta-repo**, `openspec/ideas.md` is canonical-only — mutations land via a feature branch + PR to canonical, never as direct commits to fork main.
+- **In any other repo** (a bootstrapped project), `openspec/ideas.md` is owned by that repo — the reshape is committed on a branch against the repo's own `origin`; no `upstream` and no canonical-only rule apply.
 
 Before doing anything else:
 
-1. Run `git remote get-url origin` and `git branch --show-current` in the operator's meta-repo clone.
+1. Run `git remote get-url origin` and `git branch --show-current`.
 2. Apply the decision matrix:
-   - **origin contains `alemaxdesign/claude-meta` AND branch = `main`** → proceed with a soft warning; the skill will create a feature branch internally.
-   - **origin is a fork AND branch = `main`** → proceed; the skill will branch off `main` internally.
-   - **origin is a fork AND branch ≠ `main` (feature branch)** → proceed; the skill will branch off `main` internally (the reshape PR goes to canonical, not the current feature branch).
-3. Verify the working tree is clean in the meta-repo clone. The skill refuses to proceed on a dirty tree.
+   - **origin contains `alemaxdesign/claude-meta`** (the meta-repo) → proceed; the skill will snapshot, branch off `main` internally, and open a PR to canonical regardless of the current branch.
+   - **origin is any other repo** → proceed; the skill operates on that repo's own `openspec/ideas.md` and commits on a branch against its own `origin`.
+3. Verify the working tree is clean. The skill refuses to proceed on a dirty tree.
 
 Once preflight passes, **delegate the rest to the `alemax-archive-ideas` skill** (`.claude/skills/alemax-archive-ideas/SKILL.md`).
 
@@ -26,9 +27,9 @@ Once preflight passes, **delegate the rest to the `alemax-archive-ideas` skill**
 
 ## Context guard
 
-This command requires the operator to be in their **claude-meta clone** (meta-repo), not a downstream project. The skill body's Step 1 Preflight verifies this and refuses on mismatch. If you're seeing this skill listed from a project clone session (post-`ship-alemax-skills-in-projects`), `cd` to your meta-repo clone first.
+This command is **context-adaptive** (`context: either`): it runs both in the claude-meta meta-repo and in any bootstrapped project. The skill body's Step 1 Preflight refuses only when the current repo has no `openspec/ideas.md` at its root (nothing to reshape) — not on the meta-vs-project distinction.
 
-Skill declared context: `claude-meta-only` (per `.claude/skills/alemax-archive-ideas/SKILL.md` frontmatter, codified in `openspec/specs/alemax-skills/spec.md`).
+Skill declared context: `either` (per `.claude/skills/alemax-archive-ideas/SKILL.md` frontmatter, codified in `openspec/specs/alemax-skills/spec.md`).
 
 ---
 
@@ -56,7 +57,7 @@ Examples:
 4. **Classify each** via 3-tier fallback (inline pointer → body slug-mention → operator prompt).
 5. **Confirm each** (`y` / `skip` / `edit`) unless `--yes-all`.
 6. **Atomic write** the mutated `openspec/ideas.md`.
-7. **Branch + commit + push + PR** to canonical.
+7. **Branch + commit + push** — in claude-meta, open a PR to canonical; in a project, push the branch to the repo's own origin.
 8. **Summary**.
 
 Full procedure in `.claude/skills/alemax-archive-ideas/SKILL.md`.
@@ -64,7 +65,7 @@ Full procedure in `.claude/skills/alemax-archive-ideas/SKILL.md`.
 ## When NOT to use this skill
 
 - **Right after a single archive** — wait for 3+ `[x]` entries to accumulate. One-off reshapes have low signal-to-noise ratio.
-- **Inside a fork feature branch you intend to keep separate** — the reshape always targets canonical via PR; if you're on a feature branch, the reshape branches off `main`, not your current branch.
+- **Inside a claude-meta fork feature branch you intend to keep separate** — in the meta-repo the reshape always targets canonical via PR; if you're on a feature branch, the reshape branches off `main`, not your current branch. (In a project, the reshape simply branches off your current branch and pushes to your own origin.)
 - **When § Raw ideas has zero `[x]` entries** — skill exits cleanly with "Nothing to reshape" but the operator gets no value from the run.
 
 ## Cross-links

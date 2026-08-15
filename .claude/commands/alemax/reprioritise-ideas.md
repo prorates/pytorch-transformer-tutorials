@@ -9,16 +9,17 @@ tags: [workflow, openspec, alemax, planning]
 
 ## Governance preamble (run BEFORE any other step)
 
-This command mutates `openspec/ideas.md`. The mutation lands via a feature branch + PR, never as a direct commit to fork main. The skill handles the branching internally.
+This command mutates `openspec/ideas.md`. It is **context-adaptive** and the skill handles the branching internally:
+- **In the claude-meta meta-repo**, `openspec/ideas.md` is canonical-only — the mutation lands via a feature branch + PR to canonical, never as a direct commit to fork main.
+- **In any other repo** (a bootstrapped project), `openspec/ideas.md` is owned by that repo — the mutation is committed on a branch against the repo's own `origin`; no `upstream` and no canonical-only rule apply.
 
 Before doing anything else:
 
-1. Run `git remote get-url origin` and `git branch --show-current` in the operator's meta-repo clone.
+1. Run `git remote get-url origin` and `git branch --show-current`.
 2. Apply the decision matrix:
-   - **origin contains `alemaxdesign/claude-meta` AND branch = `main`** → proceed with a soft warning; the skill will create a feature branch internally.
-   - **origin is a fork AND branch = `main`** → proceed; the skill will branch off `main` internally.
-   - **origin is a fork AND branch ≠ `main` (feature branch)** → proceed; the skill will branch off `main` internally.
-3. Verify the working tree is clean in the meta-repo clone. The skill refuses to proceed on a dirty tree.
+   - **origin contains `alemaxdesign/claude-meta`** (the meta-repo) → proceed; the skill will branch off `main` internally and open a PR to canonical regardless of the current branch.
+   - **origin is any other repo** → proceed; the skill operates on that repo's own `openspec/ideas.md` and commits on a branch against its own `origin`.
+3. Verify the working tree is clean. The skill refuses to proceed on a dirty tree.
 
 Once preflight passes, **delegate the rest to the `alemax-reprioritise-ideas` skill** (`.claude/skills/alemax-reprioritise-ideas/SKILL.md`).
 
@@ -26,9 +27,9 @@ Once preflight passes, **delegate the rest to the `alemax-reprioritise-ideas` sk
 
 ## Context guard
 
-This command requires the operator to be in their **claude-meta clone** (meta-repo), not a downstream project. The skill body's Step 1 Preflight verifies this and refuses on mismatch. If you're seeing this skill listed from a project clone session (post-`ship-alemax-skills-in-projects`), `cd` to your meta-repo clone first.
+This command is **context-adaptive** (`context: either`): it runs both in the claude-meta meta-repo and in any bootstrapped project. The skill body's Step 1 Preflight refuses only when the current repo has no `openspec/ideas.md` at its root (nothing to curate) — not on the meta-vs-project distinction.
 
-Skill declared context: `claude-meta-only` (per `.claude/skills/alemax-reprioritise-ideas/SKILL.md` frontmatter, codified in `openspec/specs/alemax-skills/spec.md`).
+Skill declared context: `either` (per `.claude/skills/alemax-reprioritise-ideas/SKILL.md` frontmatter, codified in `openspec/specs/alemax-skills/spec.md`).
 
 ---
 
@@ -48,12 +49,12 @@ Examples:
 
 ## Steps
 
-1. **Preflight** — verify claude-meta clone, clean working tree.
+1. **Preflight** — detect context, verify `openspec/ideas.md` present, clean working tree.
 2. **Walk § Raw ideas** — extract every `[ ]` entry's slug + one-line summary.
 3. **Present + pick** — show the numbered list; operator picks 3–5 by index or slug.
 4. **Detect existing § Suggested next-up** — if non-empty, ask Replace / Add to / Skip.
 5. **Atomic write** the mutated `openspec/ideas.md`.
-6. **Branch + commit + push + PR** to canonical.
+6. **Branch + commit + push** — in claude-meta, open a PR to canonical; in a project, push to the repo's own origin.
 7. **Summary**.
 
 Full procedure in `.claude/skills/alemax-reprioritise-ideas/SKILL.md`.

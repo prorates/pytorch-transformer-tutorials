@@ -164,3 +164,9 @@ tokenizer_*.json
 
 # Local scratch / claude-meta working files
 .local/
+prototypes/
+
+# Claude Code operator-local session grants (per-operator, never committed).
+# The tracked policy file, if any, is .claude/settings.json — this is its
+# operator-local counterpart.
+.claude/settings.local.json

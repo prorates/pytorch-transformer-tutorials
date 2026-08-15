@@ -2,8 +2,8 @@
 name: alemax-archive-ideas
 description: Periodic reshape of openspec/ideas.md — for each `[x]` entry in § Raw ideas, classify by reading the corresponding archived change's `proposal.md § Capabilities`, snapshot `openspec/ideas.md` to `openspec/ideas-snapshots/YYYY-MM-DD-pre-reshape.md`, append a one-line bullet under each matching capability heading in § Archived ideas — by capability, and remove the full body from § Raw ideas. Operator-triggered + per-entry confirmation. Run when § Raw ideas has accumulated `[x]` entries (weekly, after N archives, before a demo).
 license: MIT
-compatibility: Requires bash, git, gh. Operates exclusively under `openspec/` (no macOS-system-rooted paths). Honors the canonical-only governance rule per [[openspec-governance-canonical-only]] (archived 2026-05-29).
-context: claude-meta-only
+compatibility: Requires bash, git, gh. Operates exclusively under `openspec/` (no macOS-system-rooted paths). Context-adaptive — in claude-meta it honors the canonical-only governance rule per [[openspec-governance-canonical-only]] (archived 2026-05-29); in any other repo containing `openspec/ideas.md` it commits against that repo's own origin.
+context: either
 metadata:
   author: alemax
   version: "1.0"
@@ -29,7 +29,7 @@ Between reshapes, `[x]` entries accumulate in § Raw ideas — `/opsx:archive` f
 
 ## Behavior overview
 
-1. **Preflight.** Resolve the meta-repo root (`git rev-parse --show-toplevel`); verify it's claude-meta (origin URL contains `claude-meta`); verify working tree is clean.
+1. **Preflight.** Resolve the repo root (`git rev-parse --show-toplevel`); detect whether it's the claude-meta meta-repo or any other repo; verify `openspec/ideas.md` exists at the root; verify working tree is clean. The skill is `context: either` — it does NOT refuse on the meta-vs-project distinction, only when there is no `openspec/ideas.md` to manage.
 2. **Snapshot.** Copy current `openspec/ideas.md` to `openspec/ideas-snapshots/YYYY-MM-DD-pre-reshape.md`. Handle filename collisions (append `-2`, `-3`, …). Operator may pass `--context <name>` for a custom suffix.
 3. **Walk § Raw ideas.** Extract every `[x]` entry (bullet + indented continuation lines).
 4. **Per-entry classification (3-tier fallback).** For each `[x]` entry:
@@ -41,16 +41,19 @@ Between reshapes, `[x]` entries accumulate in § Raw ideas — `/opsx:archive` f
    - `skip`: leave the `[x]` entry in place; it'll be picked up at the next reshape.
    - `edit`: present the full list of capability headings under § Archived ideas; operator picks one or more; proceed with the new selection.
 6. **Atomic write.** After all entries processed, write the mutated `openspec/ideas.md` via tempfile + `mv`.
-7. **Branch + commit + PR.** Create a `chore/reshape-ideas-<date>` branch off `main`, commit with a message summarizing what was reshaped, push, open a PR via `gh pr create`.
+7. **Branch + commit (+ PR in claude-meta).** Two-mode, keyed on the context detected in Step 1. In claude-meta: create a `chore/reshape-ideas-<date>` branch off `main`, commit, push, open a PR via `gh pr create --base main` (canonical-only governance). In any other repo: commit the reshape on a `chore/reshape-ideas-<date>` branch against the project's own `origin` — the project owns its `openspec/ideas.md` outright, so no `upstream` and no canonical-only rule apply.
 8. **Final summary.** Report counts: N entries classified, M reshaped, K skipped, snapshot path, PR URL.
 
 ## Steps
 
-### Step 1 — Preflight (Context check + clean tree)
+### Step 1 — Preflight (Context detect + ideas.md presence + clean tree)
+
+This skill declares `context: either`. It does NOT refuse on the meta-vs-project
+distinction; it detects the context (to pick the commit/PR flow later) and refuses
+only when there is no `openspec/ideas.md` to manage.
 
 ```bash
-# Context check — this skill declares context: claude-meta-only.
-# Refuse if invoked from outside the meta-repo (per alemax-skills/spec.md).
+# Context detect — meta-repo vs any other repo (used later to pick commit/PR flow).
 CURRENT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [[ "$ORIGIN_URL" == *"claude-meta"* && "$CURRENT_ROOT" == *"/claude-meta" ]]; then
@@ -58,14 +61,17 @@ if [[ "$ORIGIN_URL" == *"claude-meta"* && "$CURRENT_ROOT" == *"/claude-meta" ]];
 else
   CURRENT_CONTEXT="project"
 fi
-if [[ "$CURRENT_CONTEXT" != "claude-meta" ]]; then
-  echo "ERROR: alemax-archive-ideas requires context: claude-meta-only but you're in: $CURRENT_CONTEXT" >&2
-  echo "  current:    $CURRENT_ROOT" >&2
+REPO_ROOT="$CURRENT_ROOT"
+
+# Refusal gate — there must be an openspec/ideas.md to reshape.
+if [[ ! -f "$REPO_ROOT/openspec/ideas.md" ]]; then
+  echo "ERROR: alemax-archive-ideas found no openspec/ideas.md at the repo root." >&2
+  echo "  repo: $REPO_ROOT" >&2
   echo "" >&2
-  echo "To proceed, cd to your meta-repo clone (typically: /Volumes/AIML0NN/Users/<u>/claude-code/<ghhandle>/claude-meta)." >&2
+  echo "This skill reshapes a repo's own openspec/ideas.md. Run it from the meta-repo" >&2
+  echo "or from a bootstrapped project (both ship openspec/ideas.md)." >&2
   exit 1
 fi
-META_ROOT="$CURRENT_ROOT"
 
 # Clean tree check
 if ! git diff-index --quiet HEAD --; then
@@ -74,10 +80,14 @@ if ! git diff-index --quiet HEAD --; then
 fi
 ```
 
+`REPO_ROOT` replaces the old `META_ROOT`; all subsequent steps operate on
+`$REPO_ROOT/openspec/ideas.md` (the current repo's own file), whether that repo
+is claude-meta or a bootstrapped project.
+
 ### Step 2 — Snapshot
 
 ```bash
-SNAPSHOT_DIR="$META_ROOT/openspec/ideas-snapshots"
+SNAPSHOT_DIR="$REPO_ROOT/openspec/ideas-snapshots"
 TODAY="$(date +%Y-%m-%d)"
 CONTEXT="${CONTEXT:-pre-reshape}"
 SNAPSHOT="$SNAPSHOT_DIR/$TODAY-$CONTEXT.md"
@@ -86,7 +96,7 @@ while [ -e "$SNAPSHOT" ]; do
   SNAPSHOT="$SNAPSHOT_DIR/$TODAY-$CONTEXT-$N.md"
   N=$((N+1))
 done
-cp "$META_ROOT/openspec/ideas.md" "$SNAPSHOT"
+cp "$REPO_ROOT/openspec/ideas.md" "$SNAPSHOT"
 echo "Snapshot: $SNAPSHOT"
 ```
 
@@ -157,7 +167,9 @@ TMPFILE="$(mktemp)"
 mv "$TMPFILE" openspec/ideas.md
 ```
 
-### Step 7 — Branch + commit + PR
+### Step 7 — Branch + commit (+ PR in claude-meta)
+
+Two-mode, keyed on `$CURRENT_CONTEXT` from Step 1.
 
 ```bash
 BRANCH="chore/reshape-ideas-$TODAY"
@@ -165,7 +177,16 @@ git checkout -b "$BRANCH"
 git add openspec/ideas.md openspec/ideas-snapshots/
 git commit -m "chore(openspec): reshape ideas.md — N entries to § Archived"
 git push -u origin "$BRANCH"
-gh pr create --base main --title "chore(openspec): reshape ideas.md ($TODAY)" --body "..."
+
+if [[ "$CURRENT_CONTEXT" == "claude-meta" ]]; then
+  # Meta-repo: openspec/ideas.md is canonical-only — land via PR to canonical.
+  gh pr create --base main --title "chore(openspec): reshape ideas.md ($TODAY)" --body "..."
+else
+  # Project: the repo owns its openspec/ideas.md. The branch is pushed to the
+  # project's own origin; the operator merges it (or opens a PR to their own
+  # main) per the project's own workflow. No upstream / canonical-only rule.
+  echo "Pushed $BRANCH to origin. Merge it into your main (or open a PR on your own repo)."
+fi
 ```
 
 ### Step 8 — Final summary
@@ -176,7 +197,7 @@ Reshape complete.
   Classified:  N entries
   Reshaped:    M
   Skipped:     K
-  PR:          https://github.com/alemaxdesign/claude-meta/pull/<num>
+  Landed:      PR to canonical (claude-meta)  |  branch pushed to origin (project)
 ```
 
 ## Edge cases

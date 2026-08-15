@@ -131,9 +131,18 @@ yq -e ".projects[] | select(.name == \"$NAME\")" "$META_ROOT/projects.yaml" \
 # Stack: only python or bash
 [[ "$STACK" == "python" || "$STACK" == "bash" ]] || echo "stack must be python or bash"
 
-# ghhandle: in orgs.yaml (warn-only if not)
-yq -e ".orgs[\"$GHHANDLE\"]" "$META_ROOT/orgs.yaml" 2>/dev/null \
-  || echo "ghhandle '$GHHANDLE' not in orgs.yaml"
+# ghhandle: in orgs.yaml (warn-only if not).
+# orgs.yaml is a LIST of objects keyed by `.owner` (a YAML sequence) — iterate
+# with `select`, never map-index (`.orgs["h"]` never matches a seq). Keep a
+# genuinely-absent handle (warn) distinct from an unreadable/malformed manifest
+# (surface yq's error instead of silently reporting the handle as absent).
+if ! orgs_hit=$(yq ".orgs[] | select(.owner == \"$GHHANDLE\")" "$META_ROOT/orgs.yaml" 2>&1); then
+  echo "orgs.yaml at $META_ROOT/orgs.yaml is unreadable: $orgs_hit" >&2
+elif ! yq -e '.orgs | tag == "!!seq"' "$META_ROOT/orgs.yaml" >/dev/null 2>&1; then
+  echo "orgs.yaml at $META_ROOT/orgs.yaml has no '.orgs' list — cannot validate ghhandle" >&2
+elif [[ -z "$orgs_hit" ]]; then
+  echo "ghhandle '$GHHANDLE' not in orgs.yaml"
+fi
 
 # Local clone collision
 [[ -d "/Volumes/AIML01/Users/$USER/claude-code/$GHHANDLE/$NAME" ]] \
