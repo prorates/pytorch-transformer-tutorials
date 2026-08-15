@@ -131,8 +131,28 @@ TMPFILE="$(mktemp)"
 ### Phase 2 — `/tmp/claude-*` cleanup
 
 ```bash
-# Candidates: files in /tmp matching claude-* with mtime >= session floor
-CANDIDATES="$(find /tmp -maxdepth 1 -name 'claude-*' -newermt "@$SESSION_FLOOR" 2>/dev/null)"
+# Candidates: regular files in /tmp matching claude-* with mtime >= session
+# floor.
+#
+# `-f` (regular files only), NOT `-e`: /tmp/claude-<uid> is the harness's own
+# scratchpad ROOT — one directory holding every project's and every session's
+# scratchpad, including the live one. It matches the glob and its mtime is
+# always current, so `-e` would offer it as candidate #1 on every run.
+#
+# Portable mtime compare — BSD/macOS `find` rejects `-newermt "@epoch"`, so the
+# old form silently matched nothing on the whole macOS fleet. Use `stat`, GNU
+# form FIRST: BSD `stat` rejects `-c` with a usage error on stderr and prints
+# nothing to stdout, so the fallback fires cleanly. The reverse order does not
+# fall back — GNU's `-f` takes no argument, so `%m` is read as a filename and
+# GNU still prints a filesystem block for "$p" to stdout, which the command
+# substitution captures.
+CANDIDATES="$(
+  for p in /tmp/claude-*; do
+    [ -f "$p" ] || continue
+    m="$(stat -c '%Y' "$p" 2>/dev/null || stat -f '%m' "$p" 2>/dev/null)"
+    [ -n "$m" ] && [ "$m" -ge "$SESSION_FLOOR" ] && printf '%s\n' "$p"
+  done
+)"
 ```
 
 If `$CANDIDATES` empty, print "Phase 2: no `/tmp/claude-*` candidates from this session — skipping." and continue.

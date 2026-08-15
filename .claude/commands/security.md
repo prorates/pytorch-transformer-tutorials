@@ -1,27 +1,23 @@
 ---
-description: Scan for security issues (deps, secrets, common pitfalls). Apply security-scanner subagent.
+description: Security pass. Delegates code analysis to the built-in /security-review; adds the secret + dependency scanning it does not cover.
 ---
 
 # /security
 
+Claude Code ships a built-in `/security-review` that performs LLM security analysis of the current branch's diff. It is product-maintained by Anthropic and improves on its own — **do not reimplement it here.** This command wraps it with the two things it deliberately does *not* do: working-tree secret scanning and dependency CVE auditing.
+
 ## Procedure
 
-1. **Secret scan.** Run `gitleaks detect --no-banner --redact` on the working tree. Zero hits is the bar.
-2. **Dependency audit.**
+1. **Delegate the code analysis.** Invoke the built-in `security-review` skill. This is the primary pass — do not hand-roll a parallel diff review alongside it. (If it fails on a missing reference, `git remote set-head origin --auto` fixes it.)
+2. **Secret scan** — built-in does not do this; it reads the diff, not the working tree. Run `gitleaks detect --no-banner --redact`. Zero hits is the bar.
+3. **Dependency audit** — built-in does not do this at all.
    - Python: `uv run pip-audit` (or `uv pip audit` if available). Surface critical/high CVEs first.
    - Node tooling: `npm audit --omit=dev` if `package.json` exists.
-3. **Code review pass.** Delegate to `security-scanner` subagent. Focus on:
-   - Secrets in code/logs (hardcoded tokens, debug prints of env, secrets in error messages).
-   - Input validation at trust boundaries (CLI flags, HTTP, file paths from user).
-   - Command injection (`subprocess` with `shell=True`, untrusted strings into shell).
-   - Path traversal (joining user-supplied paths without validation).
-   - SQL injection (string concat into queries).
-   - Unsafe deserialization (`pickle`, `yaml.load` without `safe_load`).
-   - Crypto: hand-rolled crypto, weak algorithms, missing constant-time compare.
-   - Permissions: secret files should be `0600`; env files should be `.gitignore`-d.
-4. **Report** in three buckets: 🚨 fix now, ⚠️ fix soon, 💡 hardening ideas.
+4. **Optional deep pass.** To review the *whole repo* against this project's threat model rather than just the branch diff, delegate to the `security-scanner` subagent. Skip it for routine changes — `/security-review` already covers the diff.
+5. **Report** in three buckets: 🚨 fix now, ⚠️ fix soon, 💡 hardening ideas. Fold the built-in's findings into these buckets rather than reporting them separately.
 
 ## Don't
 
+- Don't duplicate `/security-review`'s code analysis by hand — it is maintained upstream and gets better without you.
 - Don't auto-fix CVEs by bumping deps blindly — read the changelog for breaking changes first.
 - Don't suggest installing unverified third-party scanners; stick to the ones in the meta-repo's CI baseline.

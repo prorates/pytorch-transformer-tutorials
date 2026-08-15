@@ -2,8 +2,8 @@
 name: alemax-reprioritise-ideas
 description: Curate the § Suggested next-up section of `openspec/ideas.md` — walk § Raw ideas for `[ ]` entries, present the list with one-line summaries, let the operator pick 3–5 to surface as "next up", write pointer-only entries into § Suggested next-up. Operator-triggered, often before planning sessions. Does NOT touch § Archived ideas or § Raw ideas content.
 license: MIT
-compatibility: Requires bash, git, gh. Operates exclusively under `openspec/` (no macOS-system-rooted paths). Honors the canonical-only governance rule.
-context: claude-meta-only
+compatibility: Requires bash, git, gh. Operates exclusively under `openspec/` (no macOS-system-rooted paths). Context-adaptive — in claude-meta it honors the canonical-only governance rule; in any other repo containing `openspec/ideas.md` it commits against that repo's own origin.
+context: either
 metadata:
   author: alemax
   version: "1.0"
@@ -28,21 +28,24 @@ Each run **replaces** § Suggested next-up (does not append). The operator who r
 
 ## Behavior overview
 
-1. **Preflight.** Verify claude-meta clone, clean working tree.
+1. **Preflight.** Detect context (claude-meta vs any other repo); verify `openspec/ideas.md` exists; clean working tree. `context: either` — no meta-vs-project refusal.
 2. **Walk § Raw ideas.** Extract every `[ ]` entry's slug + one-line summary.
 3. **Present + pick.** Show the numbered list; operator picks 3–5 by index or slug.
 4. **Detect existing § Suggested next-up.** If non-empty, ask "Replace, add to, or skip?"
 5. **Write.** Replace (or append-to) the § Suggested next-up section. Atomic file write.
-6. **Branch + commit + PR.**
+6. **Branch + commit (+ PR in claude-meta).** Two-mode, keyed on context.
 7. **Final summary.**
 
 ## Steps
 
-### Step 1 — Preflight (Context check + clean tree)
+### Step 1 — Preflight (Context detect + ideas.md presence + clean tree)
+
+This skill declares `context: either`. It does NOT refuse on the meta-vs-project
+distinction; it detects the context (to pick the commit/PR flow later) and refuses
+only when there is no `openspec/ideas.md` to curate.
 
 ```bash
-# Context check — this skill declares context: claude-meta-only.
-# Refuse if invoked from outside the meta-repo (per alemax-skills/spec.md).
+# Context detect — meta-repo vs any other repo (used later to pick commit/PR flow).
 CURRENT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 ORIGIN_URL="$(git remote get-url origin 2>/dev/null || true)"
 if [[ "$ORIGIN_URL" == *"claude-meta"* && "$CURRENT_ROOT" == *"/claude-meta" ]]; then
@@ -50,14 +53,17 @@ if [[ "$ORIGIN_URL" == *"claude-meta"* && "$CURRENT_ROOT" == *"/claude-meta" ]];
 else
   CURRENT_CONTEXT="project"
 fi
-if [[ "$CURRENT_CONTEXT" != "claude-meta" ]]; then
-  echo "ERROR: alemax-reprioritise-ideas requires context: claude-meta-only but you're in: $CURRENT_CONTEXT" >&2
-  echo "  current:    $CURRENT_ROOT" >&2
+REPO_ROOT="$CURRENT_ROOT"
+
+# Refusal gate — there must be an openspec/ideas.md to curate.
+if [[ ! -f "$REPO_ROOT/openspec/ideas.md" ]]; then
+  echo "ERROR: alemax-reprioritise-ideas found no openspec/ideas.md at the repo root." >&2
+  echo "  repo: $REPO_ROOT" >&2
   echo "" >&2
-  echo "To proceed, cd to your meta-repo clone (typically: /Volumes/AIML0NN/Users/<u>/claude-code/<ghhandle>/claude-meta)." >&2
+  echo "This skill curates a repo's own openspec/ideas.md § Suggested next-up. Run it" >&2
+  echo "from the meta-repo or from a bootstrapped project (both ship openspec/ideas.md)." >&2
   exit 1
 fi
-META_ROOT="$CURRENT_ROOT"
 
 # Clean tree check
 if ! git diff-index --quiet HEAD --; then
@@ -65,6 +71,9 @@ if ! git diff-index --quiet HEAD --; then
   exit 1
 fi
 ```
+
+`REPO_ROOT` replaces the old `META_ROOT`; subsequent steps operate on the current
+repo's own `openspec/ideas.md`, whether that repo is claude-meta or a project.
 
 ### Step 2 — Walk § Raw ideas
 
@@ -147,7 +156,9 @@ TMPFILE="$(mktemp)"
 mv "$TMPFILE" openspec/ideas.md
 ```
 
-### Step 6 — Branch + commit + PR
+### Step 6 — Branch + commit (+ PR in claude-meta)
+
+Two-mode, keyed on `$CURRENT_CONTEXT` from Step 1.
 
 ```bash
 BRANCH="chore/reprioritise-ideas-$(date +%Y-%m-%d)"
@@ -155,7 +166,16 @@ git checkout -b "$BRANCH"
 git add openspec/ideas.md
 git commit -m "chore(openspec): reprioritise § Suggested next-up"
 git push -u origin "$BRANCH"
-gh pr create --base main --title "chore(openspec): reprioritise § Suggested next-up" --body "..."
+
+if [[ "$CURRENT_CONTEXT" == "claude-meta" ]]; then
+  # Meta-repo: openspec/ideas.md is canonical-only — land via PR to canonical.
+  gh pr create --base main --title "chore(openspec): reprioritise § Suggested next-up" --body "..."
+else
+  # Project: the repo owns its openspec/ideas.md. The branch is pushed to the
+  # project's own origin; the operator merges it (or opens a PR to their own
+  # main) per the project's own workflow. No upstream / canonical-only rule.
+  echo "Pushed $BRANCH to origin. Merge it into your main (or open a PR on your own repo)."
+fi
 ```
 
 ### Step 7 — Final summary
@@ -164,7 +184,7 @@ gh pr create --base main --title "chore(openspec): reprioritise § Suggested nex
 Reprioritisation complete.
   Surfaced:  3 entries
   Mode:      replace (was: 2 entries)
-  PR:        https://github.com/alemaxdesign/claude-meta/pull/<num>
+  Landed:    PR to canonical (claude-meta)  |  branch pushed to origin (project)
 ```
 
 ## Edge cases

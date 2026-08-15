@@ -50,7 +50,7 @@ Read the operator's input. If `--push` or `--dry-run` is present, thread it thro
 The skill's 5 steps (per `.claude/skills/alemax-tidy-aiml/SKILL.md`):
 
 1. Step 0 — Context check (claude-meta, fork, aiml0NN branch).
-2. Step 1 — Preflight (clean tree, origin/main not ahead).
+2. Step 1 — Preflight (clean tree, origin/main not ahead of the branch, fork main not behind canonical `upstream/main`).
 3. Step 2 — Dry-run preview to classify commits + surface mixed-file commits.
 4. Step 3 — Present plan + confirm (explicitly — force-push is involved).
 5. Step 4 + 5 — Invoke `meta/scripts/fork-tidy-aiml.sh` and report new shape.
