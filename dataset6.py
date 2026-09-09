@@ -228,7 +228,6 @@ NEG_INFTY = -1e9
 
 
 class Dataset6Tmp(Dataset[Any]):
-
     def __init__(self, src_sentences: list[str], tgt_sentences: list[str]) -> None:
         self.src_sentences = src_sentences
         self.tgt_sentences = tgt_sentences
@@ -271,7 +270,6 @@ class Dataset6Tmp(Dataset[Any]):
 
 
 class Dataset6(Dataset[Any]):
-
     def __init__(self, ds: Dataset[Any]) -> None:
         self.ds = ds
 
@@ -399,9 +397,7 @@ def filter_custom_dataset(config: ConfigDict, full_ds: Dataset6Tmp, tokenizer_sr
     return filtered_ds
 
 
-def get_ds6(
-    config: ConfigDict, model_folder: str
-) -> tuple[DataLoader[Any], DataLoader[Any], int, int, dict[str, Any], dict[str, Any], dict[Any, Any]]:
+def get_ds6(config: ConfigDict, model_folder: str) -> tuple[DataLoader[Any], DataLoader[Any], int, int, dict[str, Any], dict[str, Any], dict[Any, Any]]:
 
     full_ds = load_custom_dataset(config, model_folder)
     tokenizer_src = get_or_build_tokenizer6(config, model_folder, full_ds, config["lang_src"])
@@ -433,9 +429,7 @@ def get_ds6(
     )
 
 
-def get_testing_ds6(
-    config: ConfigDict, model_folder: str, sentence: str
-) -> tuple[str, str | None, int, int, dict[str, Any], dict[str, Any], dict[Any, Any]]:
+def get_testing_ds6(config: ConfigDict, model_folder: str, sentence: str) -> tuple[str, str | None, int, int, dict[str, Any], dict[str, Any], dict[Any, Any]]:
 
     # build tokenizers
     tokenizer_src = get_tokenizer6(config, model_folder, config["lang_src"])

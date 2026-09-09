@@ -59,7 +59,6 @@ def train_model8(config: ConfigDict) -> None:
         #     if (iter == max_iters):
         #         break
         for iter in range(max_iters):
-
             # every once in a while evaluate the loss on train and val sets
             if (iter % eval_interval == 0 or iter == max_iters - 1) and (iter > 0):
                 losses = evaluate_model8(transformer, val_dataloader, eval_iters, device, train_ds, val_ds)

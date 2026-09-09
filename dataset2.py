@@ -32,7 +32,6 @@ def get_ds2_old(config: ConfigDict, model_folder: str, device: str) -> tuple[Ten
 
 
 class Dataset2(Dataset[Any]):
-
     def __init__(self, ds: Any, t_src: Tokenizer, t_tgt: Tokenizer, src_lang: str, tgt_lang: str, seq_len: int) -> None:
         super().__init__()
 

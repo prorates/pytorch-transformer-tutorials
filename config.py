@@ -68,7 +68,7 @@ def get_device() -> str:
     if device == "cuda":
         print(f"Using NVIDIA GPU and device {device}")
         print(f"Device name: {torch.cuda.get_device_name(0)}")
-        print(f"Device memory: {torch.cuda.get_device_properties(0).total_memory / 1024 ** 3} GB")
+        print(f"Device memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3} GB")
     elif device == "mps":
         print(f"Using Apple Silicon and device {device}")
     else:

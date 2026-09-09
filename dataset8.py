@@ -17,7 +17,6 @@ from config import EOS, PAD, SOS, UNK, ConfigDict, get_config, get_model_folder
 
 
 class Dataset8(Dataset[Any]):
-
     def __init__(self, raw_text: str, tokenizer: Tokenizer, batch_size: int, block_size: int) -> None:
         super().__init__()
 

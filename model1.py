@@ -17,7 +17,6 @@ from dataset1 import casual_mask
 
 
 class LayerNormalization(nn.Module):
-
     def __init__(self, features: int, eps: float = 10**-6) -> None:
         super().__init__()
         # If sigma is getting to 0, x will be very big. Also want to avoid to devide by 0
@@ -41,7 +40,6 @@ class LayerNormalization(nn.Module):
 
 # Feed foward: Fully connected layer. Two matrices which are multiplied with the relu in between
 class FeedForwardBlock(nn.Module):
-
     def __init__(self, d_model: int, d_ff: int, dropout: float) -> None:
         super().__init__()
         self.linear_1 = nn.Linear(d_model, d_ff)  # W1 and B1
@@ -55,7 +53,6 @@ class FeedForwardBlock(nn.Module):
 
 # InputEmbeddings converts each word/token to vector of size 512
 class InputEmbeddings(nn.Module):
-
     def __init__(self, d_model: int, vocab_size: int) -> None:
         super().__init__()
         self.d_model = d_model  # 512 in the paper
@@ -75,7 +72,6 @@ class InputEmbeddings(nn.Module):
 # PositionalEncodding encodes the postion of the words.
 # Needs to have the same size has the InputEmbedding, so vector of size 512
 class PositionalEncoding(nn.Module):
-
     def __init__(self, d_model: int, seq_len: int, dropout: float) -> None:
         super().__init__()
         self.d_model = d_model
@@ -109,7 +105,6 @@ class PositionalEncoding(nn.Module):
 
 
 class ResidualConnection(nn.Module):
-
     def __init__(self, features: int, dropout: float) -> None:
         super().__init__()
         self.dropout = nn.Dropout(dropout)
@@ -135,7 +130,6 @@ class ResidualConnection(nn.Module):
 
 
 class MultiHeadAttentionBlock(nn.Module):
-
     def __init__(self, d_model: int, h: int, dropout: float) -> None:
         super().__init__()
         self.d_model = d_model  # Embedding vector size
@@ -197,7 +191,6 @@ class MultiHeadAttentionBlock(nn.Module):
 
 
 class EncoderBlock(nn.Module):
-
     def __init__(self, features: int, self_attention_block: MultiHeadAttentionBlock, feed_forward_block: FeedForwardBlock, dropout: float) -> None:
         super().__init__()
         self.self_attention_block = self_attention_block
@@ -215,7 +208,6 @@ class EncoderBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-
     def __init__(self, features: int, layers: nn.ModuleList) -> None:
         super().__init__()
         self.layers = layers
@@ -233,7 +225,6 @@ class Encoder(nn.Module):
 
 
 class DecoderBlock(nn.Module):
-
     def __init__(
         self,
         features: int,
@@ -262,7 +253,6 @@ class DecoderBlock(nn.Module):
 
 
 class Decoder(nn.Module):
-
     def __init__(self, features: int, layers: nn.ModuleList) -> None:
         super().__init__()
         self.layers = layers
@@ -281,7 +271,6 @@ class Decoder(nn.Module):
 
 
 class ProjectionLayer(nn.Module):
-
     # Need to convert the embedding back into a position in the vocabulary
     def __init__(self, d_model: int, vocab_size: int) -> None:
         super().__init__()
@@ -297,7 +286,6 @@ class ProjectionLayer(nn.Module):
 
 
 class Transformer1(nn.Module):
-
     def __init__(
         self,
         encoder: Encoder,

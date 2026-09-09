@@ -103,7 +103,7 @@ def train_model7(config: ConfigDict) -> None:
         val_ppl = math.exp(val_loss)
         elapsed = time.time() - epoch_start_time
         batch_iterator.write("-" * console_width)
-        batch_iterator.write(f"| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | " f"valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}")
+        batch_iterator.write(f"| end of epoch {epoch:3d} | time: {elapsed:5.2f}s | valid loss {val_loss:5.2f} | valid ppl {val_ppl:8.2f}")
         batch_iterator.write("-" * console_width)
 
         best_model_yet = False

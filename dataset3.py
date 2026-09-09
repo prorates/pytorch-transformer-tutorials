@@ -23,7 +23,6 @@ def nopeak_mask(size: int) -> Tensor:
 
 
 class Dataset3(Dataset[Any]):
-
     def __init__(self, ds: Any, t_src: Tokenizer, t_trg: Tokenizer, src_lang: str, tgt_lang: str, seq_len: int) -> None:
         super().__init__()
 

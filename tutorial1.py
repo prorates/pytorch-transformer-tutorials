@@ -122,7 +122,6 @@ def train_model1(config: ConfigDict) -> None:
         model.train()  # moved inside for run_validation at each step
         batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch {epoch:02d}")
         for batch_num, batch in enumerate(batch_iterator):
-
             encoder_input = batch["encoder_input"].to(device)  # (B, SeqLen)
             decoder_input = batch["decoder_input"].to(device)  # (B, SeqLen)
             encoder_mask = batch["encoder_mask"].to(device)  # (B, 1, 1, SeqLen)
@@ -173,9 +172,7 @@ def train_model1(config: ConfigDict) -> None:
             global_step += 1
 
         # Run validation at the end of each epoch
-        evaluate_model1(
-            model, val_dataloader, tokenizer_src, tokenizer_tgt, config["seq_len"], device, batch_iterator.write, global_step, writer
-        )
+        evaluate_model1(model, val_dataloader, tokenizer_src, tokenizer_tgt, config["seq_len"], device, batch_iterator.write, global_step, writer)
 
         # Save the model at the end of every epoch
         save_model(config, model, optimizer, epoch, global_step)

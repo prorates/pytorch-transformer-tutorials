@@ -34,7 +34,6 @@ def _wikitext2(split: str) -> list[str]:
 
 
 class Dataset7(Dataset[Any]):
-
     def __init__(self, raw_text_iter: Iterable[str], tokenizer: Tokenizer, bsz: int, bptt: int) -> None:
         super().__init__()
 

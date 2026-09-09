@@ -43,7 +43,6 @@ class FeedForward(nn.Module):
 
 
 class Embedder(nn.Module):
-
     def __init__(self, vocab_size: int, d_model: int) -> None:
         super().__init__()
         self.d_model = d_model
@@ -224,10 +223,7 @@ class Decoder(nn.Module):
 
 
 class Transformer3(nn.Module):
-
-    def __init__(
-        self, src_vocab_size: int, trg_vocab_size: int, src_seq_len: int, trg_seq_len: int, d_model: int, N: int, heads: int, dropout: float
-    ) -> None:
+    def __init__(self, src_vocab_size: int, trg_vocab_size: int, src_seq_len: int, trg_seq_len: int, d_model: int, N: int, heads: int, dropout: float) -> None:
         super().__init__()
         self.encoder = Encoder(src_vocab_size, src_seq_len, d_model, N, heads, dropout)
         self.decoder = Decoder(trg_vocab_size, trg_seq_len, d_model, N, heads, dropout)

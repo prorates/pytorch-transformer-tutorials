@@ -180,7 +180,6 @@ def train_model3(config: ConfigDict) -> None:
 
         batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch {epoch:02d}")
         for batch_num, batch in enumerate(batch_iterator):
-
             src = batch["src"].to(device)  # (B, SeqLen)
             trg = batch["trg"].to(device)  # (B, SeqLen)
             src_mask = batch["src_mask"].to(device)  # (B, 1, 1, SeqLen)

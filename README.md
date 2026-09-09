@@ -349,4 +349,3 @@ Insights
 Memory consumption is directly proportional to square of length of input sequence for large sequences
 
 Memory consumption is lineraly proportional to the batch size.
-

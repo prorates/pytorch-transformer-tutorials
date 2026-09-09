@@ -106,7 +106,6 @@ class Block(nn.Module):
 
 
 class Transformer8(nn.Module):
-
     def __init__(self, vocab_size: int, n_embd: int, n_layer: int, n_head: int, block_size: int, dropout: float) -> None:
         super().__init__()
         # each token directly reads off the logits for the next token from a lookup table

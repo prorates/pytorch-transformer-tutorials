@@ -17,9 +17,7 @@ from model6 import Transformer6, build_transformer6
 from utils import collect_training_metrics, load_trained_model, reload_model, save_model
 
 
-def build_model6(
-    config: ConfigDict, vocab_src_len: int, vocab_tgt_len: int, src_to_index: dict[str, int], tgt_to_index: dict[str, int]
-) -> Transformer6:
+def build_model6(config: ConfigDict, vocab_src_len: int, vocab_tgt_len: int, src_to_index: dict[str, int], tgt_to_index: dict[str, int]) -> Transformer6:
     model = build_transformer6(
         vocab_src_len,
         vocab_tgt_len,
@@ -67,7 +65,6 @@ def train_model6(config: ConfigDict) -> None:
         transformer.train()  # moved inside for run_validation at each step
         batch_iterator = tqdm(train_dataloader, desc=f"Processing epoch {epoch:02d}")
         for batch_num, batch in enumerate(batch_iterator):
-
             # src_batched_sentences: tuple[str], tgt_batched_sentences: tuple[str]
             src_batched_sentences, tgt_batched_sentences = batch
             encoder_self_attention_mask, decoder_self_attention_mask, decoder_cross_attention_mask = Dataset6.create_masks(
