@@ -140,6 +140,13 @@ uv run translate.py -m opus_books_en_it_model1                           # infer
 
 ### Notes on limited-VRAM cards
 
+- **On WSL2 you may never see `CUDA out of memory`.** WSL2's shared-memory fallback spills past
+  VRAM into host RAM over PCIe instead of raising, so an over-large batch degrades ~9–26×
+  instead of failing: measured on a 6 GB GTX 1660, model8 went 0.81 s/step → 7.29 s/step for a
+  1.25× batch increase, and 21 s/step further out. The tell is `torch.cuda.max_memory_allocated()`
+  reporting **more than the card physically has** (6.92–9.16 GiB on a 5.99 GiB card). With a
+  0.35 GiB idle desktop baseline the wall sat at ~5.1–5.8 GiB. If training is inexplicably
+  slow on WSL2, check peak memory before assuming it is compute.
 - On `CUDA out of memory`, lower `batch_size` in the model folder's `config.yaml` (e.g. 8 → 4 → 2).
   Attention memory is O(`seq_len`²), so `seq_len` is the other lever, but it changes model capacity.
 - Checkpoints (`tmodel_*.pt`) are portable across CUDA/MPS, but the committed configs were tuned for
