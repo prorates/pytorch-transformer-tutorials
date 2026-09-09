@@ -11,7 +11,7 @@
       is 0.3 ms. **5000 iters = 0.61 h, not ~15 h.** Instrumented the step directly rather
       than via `train.py` because `train_model8` ends with a 2000-token generation and a
       checkpoint write, which would swamp the measurement; same instrument will be reused
-      for task 4.1. This contradicts the premise in `proposal.md` — see the pause below.
+      for task 4.1. **This killed the original premise** (~11 s/step / ~15 h): the committed config already trained in ~36 min. `proposal.md` has since been rebuilt around memory scaling. Peak memory was NOT captured on MPS — `torch.mps` exposes no equivalent of `max_memory_allocated`, which is why the memory evidence is CUDA-only and task 4.1 measures time here and memory there.
 - [ ] 1.2 Add `tests/test_model8_attention.py` carrying a `_ReferenceHead` /
       `_ReferenceMultiHeadAttention` copy of the current per-head implementation, verbatim
       including the `C**-0.5` scale; verify the file imports and the reference runs a forward
@@ -56,13 +56,22 @@
 
 ## 4. Measure and record the result
 
-- [ ] 4.1 Re-measure step time at the committed config with the same method as 1.1; verify
-      the improvement and record both numbers
+- [ ] 4.1 Re-measure at the committed config with the same instrument as 1.1 and record
+      before/after. Time on this machine (expect no regression; ~25-30% is the estimate, not
+      the requirement). **Peak memory is the load-bearing number and needs the CUDA box** —
+      ask the paired WSL2 session to re-run its h-sweep against the rewritten `model8.py`,
+      since `torch.mps` has no `max_memory_allocated` equivalent. The claim to verify is that
+      fused peak memory is flat across `h`, matching the 2.11/2.11/2.11/2.12 GiB it measured
+      from the prototype
 - [ ] 4.2 Train a short run end to end (`train.py` at reduced `max_iters`) and confirm loss
       descends and a checkpoint is written, then delete the toy checkpoint so a later
       `preload: latest` cannot pick it up
-- [ ] 4.3 Update `openspec/ideas.md`: mark the model8 batched-attention entry `[x]` with the
-      measured before/after, and add the deferred "which attention scale is correct" entry
-      with the `n_embd**-0.5` vs `head_size**-0.5` evidence from `design.md`
+- [ ] 4.3 Mark the model8 batched-attention entry `[x]` in `openspec/ideas.md`, confirming the
+      shipped numbers match the prototype's. The entry already carries the measurements, the
+      corrected ~11 s/step history, the disproved OOM hypothesis, and the separate
+      "which attention scale is correct" entry (all landed in PR #15) — so this is a
+      confirm-and-close, not a write-up
 - [ ] 4.4 Note the model8 checkpoint-compatibility break in `architecture.md`'s known gotchas
-      if it is not already covered; verify by reading the rendered section
+      (existing `.pt` files will not load: QKV layout changed and the per-head `tril` buffers
+      left `state_dict`); verify by reading the rendered section. The WSL2 spill behaviour is
+      already documented in README's limited-VRAM notes — do not duplicate it

@@ -3,9 +3,10 @@
 ### Requirement: Attention is computed batched across heads
 
 Multi-head self-attention in the GPT-style model SHALL be computed for all heads in a single
-batched operation rather than by iterating per-head modules in Python. Training throughput at
-the committed configuration SHALL be dominated by tensor arithmetic rather than by per-head
-kernel dispatch.
+batched operation rather than by iterating per-head modules in Python, and SHALL NOT
+materialise a per-head attention matrix. Consequently peak training memory SHALL be
+independent of head count, where the per-head implementation's grows roughly in proportion
+to it.
 
 The rewrite SHALL NOT alter the model's mathematics: for identical weights and inputs, the
 batched implementation SHALL produce the same outputs as the per-head implementation it
@@ -24,12 +25,26 @@ semantics.
   weights and the same input tensor, both in eval mode
 - **THEN** their outputs agree to floating-point tolerance
 
-#### Scenario: Committed configuration is trainable in practice
+#### Scenario: Peak memory does not grow with head count
 
-- **WHEN** the GPT-style model trains at the committed configuration (`d_model` 384, `N` 6,
-  `h` 6, `block_size` 256, `batch_size` 64) on the reference Apple Silicon machine
-- **THEN** a training step completes in materially less time than the ~11 s/step measured
-  before this change, bringing the 5000-iteration loop within a few hours rather than ~15 h
+- **WHEN** the model is trained at a fixed batch size and embedding width, with head count
+  varied across the supported range
+- **THEN** peak memory is substantially flat across head counts, rather than rising roughly in
+  proportion to them as the per-head implementation does
+
+#### Scenario: More headroom before the memory-pressure regime
+
+- **WHEN** batch size is raised until training degrades from memory pressure — which on some
+  platforms means silent slowdown rather than an out-of-memory error
+- **THEN** the batched implementation reaches that point at a materially larger batch than the
+  per-head implementation it replaces, at every supported head count
+
+#### Scenario: A training step is no slower than before
+
+- **WHEN** the model trains at the committed configuration (`d_model` 384, `N` 6, `h` 6,
+  `block_size` 256, `batch_size` 64)
+- **THEN** a training step completes in no more time than the per-head implementation took on
+  the same machine, measured with the same instrument
 
 #### Scenario: Attention remains causal
 

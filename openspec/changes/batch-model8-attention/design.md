@@ -12,14 +12,19 @@ See `proposal.md — Why` for motivation. The constraints that shape the approac
   change stays inside `model8.py` and does not factor anything out.
 - `model8.py` is a teaching file: its comments explain what each tensor shape means, and that
   explanatory value has to survive the rewrite.
+- **Peak memory is the metric, not OOM.** On WSL2 — one of this repo's two documented
+  environments — exceeding VRAM does not raise; the shared-memory fallback pages into host RAM
+  and training degrades 9-26x silently. An OOM-detecting harness is structurally blind there,
+  so "the config survived" proves nothing. Every memory claim below is peak-memory measured.
 
 ## Goals / Non-Goals
 
 **Goals:**
 
-- One QKV projection and one attention call per layer, replacing `h` of each.
-- Provable equivalence to the current implementation in eval mode, so the speedup is
-  attributable and nothing about the model's behaviour is silently in flight.
+- One QKV projection and one attention call per layer, replacing `h` of each — so that peak
+  memory stops scaling with head count.
+- Provable equivalence to the current implementation in eval mode, so the memory and speed
+  results are attributable and nothing about the model's behaviour is silently in flight.
 - Keep the file readable as a tutorial — the batched formulation is explained, not just
   applied.
 
@@ -105,9 +110,13 @@ Identified by the WSL2/CUDA session while amending the shared benchmark harness,
 - **Existing model8 checkpoints become unloadable** → none are committed and none exist
   locally; stated in the proposal as BREAKING. If one turns up, retraining is cheap once this
   change lands, which is the point of the change.
-- **The measured speedup disappoints on other hardware** → the throughput scenario is written
-  against the reference Apple Silicon machine and phrased as "materially less than ~11 s/step"
-  rather than a fixed target, so it stays honest on a different device.
+- **The measured speedup disappoints on other hardware** → speed is deliberately the secondary
+  justification, and its scenario only requires "no slower than before, same machine, same
+  instrument". The load-bearing claim is the memory scaling, which is a structural property of
+  not materialising `B×h×T×T` rather than a per-device benchmark result.
+- **Someone reads the memory claim as immunity to running out** → it is not. Fused spills too,
+  at `h=6` batch 192 (6.05 GiB on a 6 GB card); it just takes 1.5-2x the batch to get there.
+  The spec scenario is written as "materially larger batch", never as "does not fail".
 - **Readability regresses for a tutorial file** → the shape-annotation comment style is kept,
   rewritten for the batched shapes rather than deleted.
 
