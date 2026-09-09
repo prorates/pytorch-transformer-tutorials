@@ -1,5 +1,54 @@
-# Tooling config only (ruff + mypy). Dependency/packaging migration to uv is a
-# separate backlog item; this file deliberately carries no [project] metadata.
+# Project metadata + tooling config (ruff, mypy, pytest).
+#
+# The dependency set below is the DIRECT imports of the tutorial modules, pinned
+# to the versions this repo is known to run under. uv.lock pins the transitive
+# closure; cuda-requirements.txt / mps-requirements.txt stay as the per-accelerator
+# freeze for a hand-built venv and are not what CI resolves.
+#
+# torchtext is deliberately absent: dataset7 replaced its EOL WikiText2 with
+# HuggingFace `datasets`, and only the comments still name it.
+
+[project]
+name = "pytorch-transformer-tutorials"
+version = "0.1.0"
+description = "Annotated PyTorch transformer implementations, from the paper up."
+# torch 2.5.1 publishes no cp313 wheels, so 3.12 is both floor and ceiling.
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "torch==2.5.1",
+    "datasets==3.2.0",
+    "tokenizers==0.21.0",
+    "torchmetrics==1.6.1",
+    "tensorboard==2.18.0",
+    "numpy==2.2.2",
+    "PyYAML==6.0.2",
+    "tqdm==4.67.1",
+]
+
+[dependency-groups]
+dev = [
+    "ruff==0.16.3",   # keep in step with .pre-commit-config.yaml
+    "mypy==1.14.1",
+    "pytest==8.3.4",
+]
+
+# Nothing here is importable as an installed distribution — the tutorial modules
+# sit at the repo root and are imported by path. Without this uv tries to build a
+# wheel from a project with no package layout and fails.
+[tool.uv]
+package = false
+
+# CI runs on linux, where PyPI's `torch` wheel drags in ~2.5 GB of nvidia-cu12
+# packages this repo never uses on a runner. The CPU index serves the same
+# version as a ~180 MB wheel. macOS is untouched: its PyPI wheel is already
+# CPU/MPS-only, and MPS support would be lost by pointing it at the CPU index.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [tool.ruff]
 line-length = 159
@@ -26,7 +75,9 @@ strict = true
 warn_return_any = false
 disallow_untyped_calls = false
 # model5.py is vendored torch source; custom_datasets holds one-off prep scripts.
-exclude = ['model5\.py', 'custom_datasets/']
+# bin/ and .claude/ are claude-meta's delivered Python (propagation class M),
+# checked upstream against meta's own config — see the ruff note above.
+exclude = ['model5\.py', 'custom_datasets/', '^bin/', '^\.claude/']
 
 # Third-party libs without (complete) type stubs.
 [[tool.mypy.overrides]]
@@ -44,3 +95,6 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["model5"]
 ignore_errors = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

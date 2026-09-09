@@ -123,9 +123,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
+      # `mypy src` in the shipped workflow assumes meta's src/ layout. The tutorial
+      # modules sit at the repo root by design — each is meant to be read and run on
+      # its own — so the target is the tree, with bin/ and .claude/ (claude-meta's
+      # delivered Python) excluded in pyproject.toml. Local edit; the class-M 3-way
+      # keeps it across broadcasts.
       - run: |
           uv sync --locked
-          uv run mypy src
+          uv run mypy .
 
   test:
     name: test
