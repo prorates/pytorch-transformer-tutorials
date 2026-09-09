@@ -166,7 +166,12 @@ tokenizer_*.json
 .local/
 prototypes/
 
-# Claude Code operator-local session grants (per-operator, never committed).
-# The tracked policy file, if any, is .claude/settings.json — this is its
-# operator-local counterpart.
+# Claude Code operator-local settings (per-operator, never committed). Reconciled
+# against the tracked floor .claude/settings-template.json by bin/reconcile-settings.py,
+# which creates the file by hand — so this line, not Claude Code's global exclude,
+# keeps it out of git. This repo never tracks a .claude/settings.json.
 .claude/settings.local.json
+
+# Claude Code worktrees (`claude --worktree`, subagent isolation) — inside a session's scope,
+# never committed (spec sibling-access-practice)
+.claude/worktrees/
