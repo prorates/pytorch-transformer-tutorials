@@ -37,7 +37,7 @@ This file orients Claude Code at the start of every session in this repo.
 Slash commands live in `.claude/commands/`:
 
 - `/plan` — Break down a feature into concrete steps.
-- `/review` — Review the current diff (uncommitted or vs `main`).
+- `/code-review` — Review the current diff (built-in; the old `/review` command no longer ships).
 - `/test` — Run tests; if failing, propose fixes; if missing, generate.
 - `/debug` — Triage a failure (test output, stack trace, log).
 - `/docs` — Update README and inline docs to match current state.
