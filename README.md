@@ -109,6 +109,12 @@ Linux NVIDIA driver inside WSL — that breaks the passthrough.
 uv sync --no-group cpu --group cu124
 ```
 
+**Verified on real hardware** (2026-09-09, GTX 1660 — Turing, sm_75, 6 GB — WSL2 / driver 581.42): the sync
+resolves `torch==2.5.1+cu124` with all 12 `nvidia-*-cu12` packages, `torch.cuda.is_available()`
+is `True`, `torch.version.cuda` is `12.4`, and a device matmul executes — the wheel unpacking
+is not by itself proof that the driver/toolkit pairing works. `uv.lock` is byte-identical
+before and after, so the lock is platform-complete and no re-lock is needed on linux.
+
 `cpu` and `cu124` are mutually exclusive dependency groups holding the same `torch==2.5.1`
 from different indexes; `cpu` is the default, so a CUDA box has to opt out of it explicitly.
 The CUDA wheels are prebuilt — you need **no C++ toolchain**, and uv installs a matching
@@ -134,6 +140,13 @@ uv run translate.py -m opus_books_en_it_model1                           # infer
 
 ### Notes on limited-VRAM cards
 
+- **On WSL2 you may never see `CUDA out of memory`.** WSL2's shared-memory fallback spills past
+  VRAM into host RAM over PCIe instead of raising, so an over-large batch degrades ~9–26×
+  instead of failing: measured on a 6 GB GTX 1660, model8 went 0.81 s/step → 7.29 s/step for a
+  1.25× batch increase, and 21 s/step further out. The tell is `torch.cuda.max_memory_allocated()`
+  reporting **more than the card physically has** (6.92–9.16 GiB on a 5.99 GiB card). With a
+  0.35 GiB idle desktop baseline the wall sat at ~5.1–5.8 GiB. If training is inexplicably
+  slow on WSL2, check peak memory before assuming it is compute.
 - On `CUDA out of memory`, lower `batch_size` in the model folder's `config.yaml` (e.g. 8 → 4 → 2).
   Attention memory is O(`seq_len`²), so `seq_len` is the other lever, but it changes model capacity.
 - Checkpoints (`tmodel_*.pt`) are portable across CUDA/MPS, but the committed configs were tuned for
