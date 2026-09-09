@@ -10,8 +10,14 @@ repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
+      # custom_datasets/ is DATA, not source: the en/fr corpora and unicodes.txt
+      # (a TSV whose last column is legitimately empty on some rows) both lose
+      # content to a trailing-whitespace strip. Local addition; survives the
+      # class-M 3-way as long as it stays a distinct block.
       - id: trailing-whitespace
+        exclude: ^custom_datasets/
       - id: end-of-file-fixer
+        exclude: ^custom_datasets/
       - id: check-yaml
       - id: check-toml
       - id: check-merge-conflict

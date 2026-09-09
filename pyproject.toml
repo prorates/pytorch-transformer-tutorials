@@ -7,7 +7,12 @@ target-version = "py312"
 # model5.py is a near-verbatim vendored copy of torch's nn.Transformer; keep it
 # close to upstream rather than reformatting/relinting it. custom_datasets holds
 # one-off data-prep scripts and notebooks are out of scope for the lint baseline.
-extend-exclude = ["model5.py", "custom_datasets", "*.ipynb"]
+#
+# .claude/ and bin/ hold Python delivered by claude-meta (propagation class M).
+# It is not ours to restyle: reformatting it desyncs the files from meta's copy,
+# so every later broadcast lands as a 3-way conflict on pure formatting. It is
+# linted upstream against meta's own config, not this repo's line-length.
+extend-exclude = ["model5.py", "custom_datasets", "*.ipynb", ".claude", "bin"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
