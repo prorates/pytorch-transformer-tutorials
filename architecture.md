@@ -109,9 +109,10 @@ device and raises if that backend is absent). To move a model between machines, 
 
 - **Device:** chosen by `get_device()`; CUDA-only calls (e.g. `torch.cuda.empty_cache()`)
   must be guarded by `if device == "cuda"` so MPS/CPU runs don't raise.
-- **Dependencies:** `mps-requirements.txt` (Apple Silicon, `torch==2.5.1`) and
-  `cuda-requirements.txt` (NVIDIA, `torch==2.3.1` — drifted; unifying the pins is a
-  tracked idea). Lint/type tooling (`ruff`, `mypy`) is configured in `pyproject.toml`.
+- **Dependencies:** declared in `pyproject.toml` and pinned by `uv.lock`. `torch==2.5.1`
+  sits in two mutually exclusive groups — `cpu` (default; the index also serves the macOS
+  arm64/MPS wheel) and `cu124` (NVIDIA, linux-only) — so both accelerators now name one
+  version. Lint/type tooling (`ruff`, `mypy`, `pytest`) is in the `dev` group.
 - **Default config:** `model8` / `tinyshakespeare` / `en`→`en` — i.e. the Shakespeare demo.
 
 ## Known gotchas

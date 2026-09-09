@@ -14,8 +14,9 @@ version = "0.1.0"
 description = "Annotated PyTorch transformer implementations, from the paper up."
 # torch 2.5.1 publishes no cp313 wheels, so 3.12 is both floor and ceiling.
 requires-python = ">=3.12,<3.13"
+# torch is NOT here — it lives in the `cpu` / `cu124` groups below, because the
+# wheel to install depends on the accelerator, not on the platform alone.
 dependencies = [
-    "torch==2.5.1",
     "datasets==3.2.0",
     "tokenizers==0.21.0",
     "torchmetrics==1.6.1",
@@ -31,23 +32,45 @@ dev = [
     "mypy==1.14.1",
     "pytest==8.3.4",
 ]
+# Accelerator groups — exactly one is ever installed. `cpu` is a default group, so
+# a bare `uv sync` / `uv run` does the right thing on Apple Silicon (the CPU index
+# serves the same macOS arm64 wheel as PyPI, MPS included) and on a CPU-only linux
+# box. An NVIDIA machine opts out and in:
+#
+#     uv sync --no-group cpu --group cu124
+#
+# This replaces cuda-requirements.txt / mps-requirements.txt, whose torch pins had
+# drifted apart (2.3.1 vs 2.5.1). Both groups now name one version.
+cpu = ["torch==2.5.1"]
+cu124 = ["torch==2.5.1"]
 
 # Nothing here is importable as an installed distribution — the tutorial modules
 # sit at the repo root and are imported by path. Without this uv tries to build a
 # wheel from a project with no package layout and fails.
 [tool.uv]
 package = false
+default-groups = ["dev", "cpu"]
+conflicts = [[{ group = "cpu" }, { group = "cu124" }]]
 
-# CI runs on linux, where PyPI's `torch` wheel drags in ~2.5 GB of nvidia-cu12
-# packages this repo never uses on a runner. The CPU index serves the same
-# version as a ~180 MB wheel. macOS is untouched: its PyPI wheel is already
-# CPU/MPS-only, and MPS support would be lost by pointing it at the CPU index.
+# PyPI's linux `torch` wheel drags in ~2.5 GB of nvidia-cu12 packages, which a CI
+# runner and a CPU-only box never use; the CPU index serves the same version as a
+# ~180 MB wheel and carries the macOS arm64 wheel unchanged. The CUDA index is
+# linux-only — it publishes no darwin wheels, so without the marker the lock has
+# no resolution for macOS + cu124.
 [tool.uv.sources]
-torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torch = [
+    { index = "pytorch-cpu", group = "cpu" },
+    { index = "pytorch-cu124", group = "cu124", marker = "sys_platform == 'linux'" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu124"
+url = "https://download.pytorch.org/whl/cu124"
 explicit = true
 
 [tool.ruff]

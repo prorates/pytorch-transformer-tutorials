@@ -30,22 +30,29 @@ are inference-shaped, but won't train yet.
 
 ## Quick start
 
+Dependencies are managed with [uv](https://docs.astral.sh/uv/); `uv.lock` pins the whole
+graph, and `uv run` creates and syncs `.venv` on first use, so there is no activate step.
+
 ```bash
-# 1. Environment (pick the file matching your hardware)
-python3 -m venv .venv && source .venv/bin/activate     # or: uv venv .venv
-pip install -r mps-requirements.txt                    # Apple Silicon
-# pip install -r cuda-requirements.txt                 # NVIDIA / WSL — see section below
+# 1. Environment — Apple Silicon / CPU. Installs Python 3.12 too if you lack it.
+uv sync
+
+#    NVIDIA (incl. WSL2): swap the accelerator group. See the CUDA section below.
+# uv sync --no-group cpu --group cu124
 
 # 2. Train (the device is auto-selected: CUDA → MPS → CPU)
-python train.py                                        # default: model8 on tinyshakespeare
-TOKENIZERS_PARALLELISM=false python train.py -m opus_books_en_it_model1   # model1, en→it
+uv run train.py                                        # default: model8 on tinyshakespeare
+TOKENIZERS_PARALLELISM=false uv run train.py -m opus_books_en_it_model1   # model1, en→it
 
 # 3. Inference (requires a trained checkpoint)
-python translate.py                                                       # generate Shakespeare (model8)
-python translate.py -m opus_books_en_it_model1 -s "I am not a very good student."
+uv run translate.py                                                       # generate Shakespeare (model8)
+uv run translate.py -m opus_books_en_it_model1 -s "I am not a very good student."
 
 # 4. Quick build/shape smoke check across models
-python test.py
+uv run test.py
+
+# 5. The checks CI runs
+uv run pytest && uv run ruff check . && uv run mypy .
 ```
 
 **CLI flags:** both `train.py` and `translate.py` take `-c <config.yaml>` or
@@ -99,27 +106,26 @@ Linux NVIDIA driver inside WSL — that breaks the passthrough.
 ### 2. Python environment (inside WSL)
 
 ```bash
-python3 -m venv .venv            # or: uv venv .venv
-source .venv/bin/activate
-pip install -r cuda-requirements.txt
+uv sync --no-group cpu --group cu124
 ```
 
-The CUDA wheels are prebuilt — you normally need **no C++ toolchain**. If pip falls back to a
-source build (usually a Python-version mismatch), install build tools with
-`sudo apt install build-essential python3-dev`, or switch to Python 3.11/3.12 which have wheels.
+`cpu` and `cu124` are mutually exclusive dependency groups holding the same `torch==2.5.1`
+from different indexes; `cpu` is the default, so a CUDA box has to opt out of it explicitly.
+The CUDA wheels are prebuilt — you need **no C++ toolchain**, and uv installs a matching
+Python 3.12 itself rather than falling back to a source build.
 
 Verify torch sees the GPU:
 
 ```bash
-python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+uv run python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
 ```
 
 ### 3. Train / translate (identical commands on any backend)
 
 ```bash
-TOKENIZERS_PARALLELISM=false python train.py -m opus_books_en_it_model1   # model1, en->it
-python train.py                                                          # default model8, tinyshakespeare
-python translate.py -m opus_books_en_it_model1                           # inference
+TOKENIZERS_PARALLELISM=false uv run train.py -m opus_books_en_it_model1   # model1, en->it
+uv run train.py                                                          # default model8, tinyshakespeare
+uv run translate.py -m opus_books_en_it_model1                           # inference
 ```
 
 `train.py` takes `-c <config.yaml>` or `-m <modelfolder>`; with neither it auto-generates
@@ -133,8 +139,8 @@ python translate.py -m opus_books_en_it_model1                           # infer
 - Checkpoints (`tmodel_*.pt`) are portable across CUDA/MPS, but the committed configs were tuned for
   a 24 GB Apple Silicon box — on a roomier CUDA card you can raise `batch_size` for more throughput.
 - Older cards without tensor cores (e.g. GTX 16-series) run fp32 fine; mixed precision won't help much.
-- `cuda-requirements.txt` (torch 2.3.1) has drifted from `mps-requirements.txt` (torch 2.5.1); bump the
-  pin to 2.5.1 if you hit CUDA op issues.
+- Both accelerator groups pin the same `torch==2.5.1`; the old split between
+  `cuda-requirements.txt` (2.3.1) and `mps-requirements.txt` (2.5.1) is gone.
 
 ## Tested environments
 
@@ -148,9 +154,9 @@ seq_len=350) at the committed `batch_size=8`:
 
 Notes:
 
-- **Python:** there are no PyTorch wheels for 3.14 yet, so use **3.12** (prebuilt `cp312`
-  wheels exist for both the CUDA 2.3.1 and MPS 2.5.1 pins). On 3.14 pip falls back to a
-  source build and needs a C++ toolchain.
+- **Python:** `requires-python = ">=3.12,<3.13"` — torch 2.5.1 publishes no `cp313`+
+  wheels, and uv installs a matching 3.12 for you rather than falling back to a source
+  build, so the version on your PATH does not matter.
 - **System CUDA version doesn't need to match the wheel.** The torch wheel bundles its own
   CUDA 12.x runtime; a CUDA 13.0 *driver* only needs to be ≥ the wheel's runtime (it's
   backward-compatible). You don't need a matching system CUDA toolkit.
