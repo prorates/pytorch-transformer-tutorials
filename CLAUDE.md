@@ -7,7 +7,23 @@ This file orients Claude Code at the start of every session in this repo.
 
 ## Project purpose
 
-<TBD>
+Eight independent transformer implementations (`model1`–`model8`), each transcribed from a
+different public tutorial, video, or blog, then adapted to new datasets and brought up to a
+common `ruff` + `mypy --strict` standard. **They are deliberately kept parallel — the value
+is in comparing them, not unifying them**, so resist refactoring shared code out of the
+families unless a change explicitly calls for it.
+
+Every model `N` is a triad behind a uniform contract: `modelN.py` (network), `datasetN.py`
+(data + tokenizer + masks), `tutorialN.py` (`train_modelN` / `translateN` /
+`debug_code_modelN`). Three CLIs — `train.py`, `translate.py`, `test.py` — read a config and
+`match config["alt_model"]` to dispatch. `architecture.md` has the full design.
+
+Two conventions worth knowing before editing:
+
+- `model5.py` is a near-verbatim vendored copy of torch's `nn.Transformer`; it is excluded
+  from ruff and mypy on purpose, so keep it close to upstream.
+- `# JEB:` comments flag open correctness questions inherited from the source tutorials.
+  Some are real bugs, some are study notes — read before "fixing" one.
 
 ## Identity
 

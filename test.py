@@ -8,6 +8,7 @@ from tutorial4 import debug_code_model4
 from tutorial5 import debug_code_model5
 from tutorial6 import debug_code_model6
 from tutorial7 import debug_code_model7
+from tutorial8 import debug_code_model8
 
 if __name__ == "__main__":
     # warnings.filterwarnings('ignore')
@@ -21,3 +22,4 @@ if __name__ == "__main__":
     debug_code_model5(config, device)
     debug_code_model6(config, device)
     debug_code_model7(config, device)
+    debug_code_model8(config, device)
