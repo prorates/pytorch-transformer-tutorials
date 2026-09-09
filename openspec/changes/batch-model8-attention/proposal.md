@@ -28,9 +28,15 @@ pages into host RAM over PCIe and training degrades **9–26×** with no error: 
 experiences "training is inexplicably slow" and has nothing to search for. Per-head reaches that
 regime at 1.5–2× smaller batch than fused, and the gap widens with `h`.
 
-Speed is a real but secondary benefit: **22% faster** at the committed config on CUDA
-(0.585 → 0.456 s/step), and 25–30% estimated on MPS from the head-count sweep. Dispatch cost is
-~32 ms per extra head-module on CUDA and ~24 ms on MPS, against ~6 ms fused.
+Speed is a real but secondary benefit, and it is **much more modest on MPS than on CUDA**:
+22% at the committed config on CUDA (0.585 → 0.456 s/step) against **9.1% on MPS**
+(0.438 → 0.398 s/step). The head-count sweep says why — dispatch cost per extra head-module
+falls from ~32 ms to ~6 ms on CUDA, but only from ~24 ms to ~15 ms on MPS, where fused still
+scales visibly with `h` (0.319 s/step at h=1 against 0.483 at h=12). MPS's
+`scaled_dot_product_attention` does not fuse as aggressively.
+
+An earlier estimate of 25–30% on MPS, extrapolated from the per-head sweep rather than
+measured, was wrong; 9.1% is the measured figure.
 
 Finally, this is a teaching repo. The fused-QKV + SDPA formulation is the one a reader will meet
 in every production GPT implementation, and `model8` is the file that should show it.

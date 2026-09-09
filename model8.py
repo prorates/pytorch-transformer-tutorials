@@ -12,57 +12,50 @@ from config import get_device
 device = get_device()
 
 
-class Head(nn.Module):
-    """one head of self-attention"""
-
-    def __init__(self, head_size: int, n_embd: int, block_size: int, dropout: float) -> None:
-        super().__init__()
-        self.key = nn.Linear(n_embd, head_size, bias=False)
-        self.query = nn.Linear(n_embd, head_size, bias=False)
-        self.value = nn.Linear(n_embd, head_size, bias=False)
-        self.register_buffer("tril", torch.tril(torch.ones(block_size, block_size)))
-
-        self.dropout = nn.Dropout(dropout)
-
-    def forward(self, x: Tensor) -> Tensor:
-        _B, T, C = x.shape
-        # Every single node is emiting a query and a key vector.
-        # The Query vector is what I'm looking for.
-        # The Key vector is what do I contain.
-        k = self.key(x)  # (B,T,C)
-        q = self.query(x)  # (B,T,C)
-        # compute attention scores ("affinities")
-        # The dot product between the key and the query. My query time the dot product of all the other tokens.
-        # If the key and query are aligned, they will interact for a higher amount, and I'll learn about that
-        # specific token.
-        # We need to transpose the key but k has three dimensions. We only want to transpose the two last
-        # dimensions.
-        wei = q @ k.transpose(-2, -1) * C**-0.5  # (B, T, C) @ (B, C, T) -> (B, T, T)
-        # We apply the upper triangular mask. Remove communications with future nodes.
-        wei = wei.masked_fill(self.tril[:T, :T] == 0, float("-inf"))  # (B, T, T)
-        # We exponentiate and normalize. Each line has it sums of values . Remove communications with future nodes.
-        wei = F.softmax(wei, dim=-1)  # (B, T, T)
-        wei = self.dropout(wei)
-        # perform the weighted aggregation of the values.
-        # x is the private information to this token. v is what I will communicate if you pesk me.
-        v = self.value(x)  # (B,T,C)
-        out = wei @ v  # (B, T, T) @ (B, T, C) -> (B, T, C)
-        return out
-
-
 class MultiHeadAttention(nn.Module):
-    """multiple heads of self-attention in parallel"""
+    """multiple heads of self-attention, computed as one batched operation"""
 
     def __init__(self, num_heads: int, head_size: int, n_embd: int, block_size: int, dropout: float) -> None:
         super().__init__()
-        self.heads = nn.ModuleList([Head(head_size, n_embd, block_size, dropout) for _ in range(num_heads)])
+        # The heads tile the embedding: concatenating their outputs has to land back on
+        # n_embd for self.proj. That was always required — a bad pairing used to fail deep
+        # inside proj with a shape error — and the fused projection makes it structural.
+        assert num_heads * head_size == n_embd, f"num_heads * head_size ({num_heads} * {head_size}) must equal n_embd ({n_embd})"
+        self.num_heads = num_heads
+        self.head_size = head_size
+        # One projection for all heads and all three roles: (B,T,C) -> (B,T,3C). This replaces
+        # 3 * num_heads separate nn.Linear calls, which is the whole point — the arithmetic was
+        # never the cost, the per-head dispatch was.
+        self.c_attn = nn.Linear(n_embd, 3 * n_embd, bias=False)
         self.proj = nn.Linear(n_embd, n_embd)
+        self.attn_dropout = dropout
         self.dropout = nn.Dropout(dropout)
+        # No `tril` buffer: F.scaled_dot_product_attention applies the causal mask itself via
+        # is_causal, so the model no longer carries num_layers * num_heads identical copies.
 
     def forward(self, x: Tensor) -> Tensor:
-        out = torch.cat([h(x) for h in self.heads], dim=-1)
-        out = self.dropout(self.proj(out))
-        return out
+        B, T, C = x.shape
+        # Split the fused projection back into the three roles, each still (B,T,C).
+        q, k, v = self.c_attn(x).split(C, dim=2)
+        # (B,T,C) -> (B,T,nh,hs) -> (B,nh,T,hs): heads become a batch dimension, so one
+        # attention call covers all of them. Head i keeps columns [i*hs:(i+1)*hs], the same
+        # layout the old torch.cat over per-head outputs produced.
+        q, k, v = (t.view(B, T, self.num_heads, self.head_size).transpose(1, 2) for t in (q, k, v))
+        # scale= is not decoration: model8 has always divided by sqrt of the FULL embedding
+        # dim, where this function defaults to sqrt of the head size. They differ by sqrt(h).
+        # Passing it keeps the rewrite numerically equivalent; dropping it silently retunes
+        # the model. tests/test_model8_attention.py has a negative control for exactly this.
+        out = F.scaled_dot_product_attention(
+            q,
+            k,
+            v,
+            is_causal=True,
+            scale=C**-0.5,
+            dropout_p=self.attn_dropout if self.training else 0.0,
+        )
+        # (B,nh,T,hs) -> (B,T,nh,hs) -> (B,T,C), reassembling the heads side by side.
+        out = out.transpose(1, 2).contiguous().view(B, T, C)
+        return self.dropout(self.proj(out))
 
 
 class FeedFoward(nn.Module):
