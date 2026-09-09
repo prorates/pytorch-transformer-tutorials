@@ -138,10 +138,17 @@ def translate8(config: ConfigDict, sentence: str) -> None:
 
 
 def debug_code_model8(config: ConfigDict, device: str) -> None:
+    # tinyshakespeare / en->en, not the en->fr `translate` corpus the other
+    # debug_code_model* copy. model8 is char-level language modelling, and
+    # dataset8.load_custom_dataset reads `custom_datasets/<datasource>/<lang>.txt`
+    # — unsuffixed, which is how the tinyshakespeare tree is laid out. The
+    # translate corpora live in `<datasource>_<src>_<tgt>/`, so pointing this at
+    # "translate" looked for custom_datasets/translate/en.txt and raised
+    # FileNotFoundError. It went unnoticed because test.py never called this.
     config["model"] = "model8"
-    config["datasource"] = "translate"
+    config["datasource"] = "tinyshakespeare"
     config["lang_src"] = "en"
-    config["lang_tgt"] = "fr"
+    config["lang_tgt"] = "en"
 
     model_folder = get_model_folder(config)
     Path(model_folder).mkdir(parents=True, exist_ok=True)

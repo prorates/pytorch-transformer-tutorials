@@ -72,9 +72,11 @@ class PositionalEncoder(nn.Module):
         x = x * math.sqrt(self.d_model)
         # add constant to embedding
         seq_len = x.size(1)
+        # `pe` is a registered buffer, so `.to(device)` on the module has already
+        # placed it — it is on x's device whatever the backend. The old
+        # `if x.is_cuda: pe.cuda()` was both CUDA-only and a no-op: `.cuda()`
+        # returns a new tensor rather than moving this one in place.
         pe = Variable(self.pe[:, :seq_len], requires_grad=False)
-        if x.is_cuda:
-            pe.cuda()
         x = x + pe
         return self.dropout(x)
 
