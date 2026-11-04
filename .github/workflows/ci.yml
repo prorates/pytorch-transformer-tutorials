@@ -43,13 +43,26 @@ jobs:
   detect:
     name: Detect stack
     runs-on: ubuntu-latest
+    # A stalled runner step otherwise holds the job to GitHub's 6 h ceiling and drains the
+    # org's shared Actions minutes; a healthy run of any job here takes a few minutes.
+    timeout-minutes: 15
     outputs:
       python: ${{ steps.detect.outputs.python }}
       bash: ${{ steps.detect.outputs.bash }}
       bats: ${{ steps.detect.outputs.bats }}
       go: ${{ steps.detect.outputs.go }}
+      xcode: ${{ steps.detect.outputs.xcode }}
+      image: ${{ steps.detect.outputs.image }}
+      rust: ${{ steps.detect.outputs.rust }}
+      rust_dirs: ${{ steps.detect.outputs.rust_dirs }}
+      java: ${{ steps.detect.outputs.java }}
+      java_dirs: ${{ steps.detect.outputs.java_dirs }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Two commits: on a pull_request the checkout is the merge commit, so HEAD^1 is the
+          # base tip and `git diff HEAD^1 HEAD` is exactly what the PR changes.
+          fetch-depth: 2
       - id: detect
         run: |
           if [[ -f pyproject.toml ]]; then
@@ -75,11 +88,120 @@ jobs:
           else
             echo "go=false" >> "$GITHUB_OUTPUT"
           fi
+          # `xcode` gates the macOS job, which bills at 10x a Linux runner against the
+          # org's shared pool: true only when the repo has an Xcode project AND this event
+          # touches it. A push to main always counts, so main stays verified; a pull
+          # request counts only when its diff reaches xcode/ or bin/xcode. A failed diff
+          # fails the step rather than silently skipping the job.
+          xcode=false
+          if [[ -f xcode/project.yml ]]; then
+            if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+              xcode=true
+            else
+              changed="$(git diff --name-only HEAD^1 HEAD)"
+              if grep -Eq '^(xcode/|bin/xcode$)' <<<"$changed"; then
+                xcode=true
+              fi
+            fi
+          fi
+          echo "xcode=$xcode" >> "$GITHUB_OUTPUT"
+          # `image` gates image-check, a build of every platform (spec container-image):
+          # true only when the repo has a Dockerfile (root or one folder down) AND this event
+          # touches what goes into an image. A push to main always counts; a pull request
+          # counts when its diff reaches a Dockerfile, a .dockerignore, the Makefile, or the
+          # source of a stack that ships an image. A failed diff fails the step.
+          # The root Makefile must also define docker-buildx-check, the target the job runs:
+          # a project older than the contract (its own Makefile or build script) skips the
+          # job instead of failing every push to main once a broadcast delivers it.
+          image=false
+          if { compgen -G "Dockerfile" >/dev/null || compgen -G "*/Dockerfile" >/dev/null; } \
+            && grep -Eq '^docker-buildx-check[[:space:]]*:' Makefile 2>/dev/null; then
+            if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+              image=true
+            else
+              changed="$(git diff --name-only HEAD^1 HEAD)"
+              if grep -Eq '(^|/)Dockerfile$|(^|/)\.dockerignore$|^Makefile$|\.go$|(^|/)go\.(mod|sum)$|\.rs$|(^|/)Cargo\.(toml|lock)$|(^|/)rust-toolchain\.toml$' <<<"$changed"; then
+                image=true
+              fi
+            fi
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          # `rust` gates the rust and cargo-deny jobs (spec rust-stack); `rust_dirs` is the
+          # JSON list of crate folders they run in: the repo root when it holds Cargo.toml
+          # (a root workspace covers its members), otherwise each top-level folder holding
+          # one (rust/, rust-blinkt/). A push to main always counts; a pull request counts
+          # when its diff reaches a crate folder or bin/rust.
+          crates=()
+          if [[ -f Cargo.toml ]]; then
+            crates=(.)
+          else
+            for f in */Cargo.toml; do
+              if [[ -f "$f" ]]; then crates+=("${f%/Cargo.toml}"); fi
+            done
+          fi
+          rust=false
+          if (( ${#crates[@]} > 0 )); then
+            if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+              rust=true
+            else
+              changed="$(git diff --name-only HEAD^1 HEAD)"
+              for c in "${crates[@]}"; do
+                if [[ "$c" == "." ]]; then
+                  pat='\.rs$|(^|/)Cargo\.(toml|lock)$|(^|/)rust-toolchain\.toml$|(^|/)deny\.toml$|^bin/rust$'
+                else
+                  pat="^$c/|^bin/rust\$"
+                fi
+                if grep -Eq "$pat" <<<"$changed"; then rust=true; fi
+              done
+            fi
+            dirs_json="$(printf '%s\n' "${crates[@]}" | jq -R . | jq -sc .)"
+          else
+            dirs_json='[]'
+          fi
+          echo "rust=$rust" >> "$GITHUB_OUTPUT"
+          echo "rust_dirs=$dirs_json" >> "$GITHUB_OUTPUT"
+          # `java` gates the java and java-lint jobs (spec java-stack); `java_dirs` is the JSON
+          # list of Maven folders they run in: the repo root when it holds pom.xml (a root pom
+          # covers its modules), otherwise each top-level folder holding one (java/). A push to
+          # main always counts; a pull request counts when its diff reaches a Maven folder or
+          # bin/jvm.
+          poms=()
+          if [[ -f pom.xml ]]; then
+            poms=(.)
+          else
+            for f in */pom.xml; do
+              if [[ -f "$f" ]]; then poms+=("${f%/pom.xml}"); fi
+            done
+          fi
+          java=false
+          if (( ${#poms[@]} > 0 )); then
+            if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+              java=true
+            else
+              changed="$(git diff --name-only HEAD^1 HEAD)"
+              for c in "${poms[@]}"; do
+                if [[ "$c" == "." ]]; then
+                  pat='\.java$|(^|/)pom\.xml$|(^|/)\.mvn/|^bin/jvm$'
+                else
+                  pat="^$c/|^bin/jvm\$"
+                fi
+                if grep -Eq "$pat" <<<"$changed"; then java=true; fi
+              done
+            fi
+            java_json="$(printf '%s\n' "${poms[@]}" | jq -R . | jq -sc .)"
+          else
+            java_json='[]'
+          fi
+          echo "java=$java" >> "$GITHUB_OUTPUT"
+          echo "java_dirs=$java_json" >> "$GITHUB_OUTPUT"
 
   lint:
     name: lint
     needs: detect
     runs-on: ubuntu-latest
+    # A stalled runner step otherwise holds the job to GitHub's 6 h ceiling and drains the
+    # org's shared Actions minutes; a healthy run of any job here takes a few minutes.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       # Held at v7 — the LAST major with a bare `@vN` tag. setup-uv v8.0.0 stopped
@@ -100,13 +222,19 @@ jobs:
           uv sync --locked
           uv run ruff check .
           uv run ruff format --check .
-      - name: shellcheck + shfmt
+      # The downloads get their own step and the 5-minute bound: apt-get and curl are where
+      # runs hang. The check itself is bounded only by the job, so a large repo is not cut off.
+      - name: Install shellcheck + shfmt
+        timeout-minutes: 5
         if: needs.detect.outputs.bash == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq shellcheck
           curl -sSfL "https://github.com/mvdan/sh/releases/download/v3.13.1/shfmt_v3.13.1_linux_amd64" -o /tmp/shfmt
           chmod +x /tmp/shfmt && sudo mv /tmp/shfmt /usr/local/bin/shfmt
+      - name: shellcheck + shfmt
+        if: needs.detect.outputs.bash == 'true'
+        run: |
           # Only scan tracked shell files — avoids recursing into .venv, etc.
           # bin/ also holds Python tools (bin/check-doc-set.py); shellcheck rejects those.
           mapfile -t sh_files < <(git ls-files '*.sh' '*.bash' 'bin/*' | grep -Ev '^(\.venv|node_modules|dist|build)/|\.py$' || true)
@@ -120,6 +248,9 @@ jobs:
     needs: detect
     if: needs.detect.outputs.python == 'true'
     runs-on: ubuntu-latest
+    # A stalled runner step otherwise holds the job to GitHub's 6 h ceiling and drains the
+    # org's shared Actions minutes; a healthy run of any job here takes a few minutes.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v7
@@ -136,6 +267,9 @@ jobs:
     name: test
     needs: detect
     runs-on: ubuntu-latest
+    # A stalled runner step otherwise holds the job to GitHub's 6 h ceiling and drains the
+    # org's shared Actions minutes; a healthy run of any job here takes a few minutes.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - name: Install uv
@@ -146,25 +280,33 @@ jobs:
         run: |
           uv sync --locked
           uv run pytest
-      - name: bats
+      - name: Install bats
+        timeout-minutes: 5  # apt-get is where runs hang; the suite itself is bounded by the job
         if: needs.detect.outputs.bats == 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq bats
-          bats tests/
+      - name: bats
+        if: needs.detect.outputs.bats == 'true'
+        run: bats tests/
 
   secret-scan:
     name: secret-scan
     runs-on: ubuntu-latest
+    # A stalled runner step otherwise holds the job to GitHub's 6 h ceiling and drains the
+    # org's shared Actions minutes; a healthy run of any job here takes a few minutes.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # Use the gitleaks binary directly — gitleaks-action requires a paid
       # license for org-owned repos, and we don't need its PR-comment features.
-      - name: gitleaks
+      - name: Install gitleaks
+        timeout-minutes: 5  # curl is where runs hang; the full-history scan is bounded by the job
         run: |
           GITLEAKS_VERSION=8.21.2
           curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" \
             | tar -xz -C /tmp gitleaks
-          /tmp/gitleaks detect --source . --redact --verbose
+      - name: gitleaks
+        run: /tmp/gitleaks detect --source . --redact --verbose

@@ -2,22 +2,21 @@
 name: lint-docs
 description: Audit this repo's documents — the three-doc set (CLAUDE.md · README.md · architecture.md), the startup context budget, and intent · spec · plan on every in-flight change. Use when asked whether the docs are still consistent, before a broadcast, or after editing CLAUDE.md.
 license: MIT
-compatibility: Requires git and `uv` or `python3`. Runs in a claude-meta clone or any bootstrapped project; the checkers ship as class-M `bin/**`, so a project that predates them is told to run `/alemax:complete-update` rather than failing.
+compatibility: Requires git and `uv`. Runs in a claude-meta clone or any bootstrapped project; the checkers ship as class-M `bin/**`, so a project that predates them is told to run `/alemax:complete-update` rather than failing.
 context: either
 argument-hint: "[--strict] [--repo <path>]"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/lint-all/scripts/claude_lint.py *) Bash(python3 .claude/skills/alemax/skills/lint-all/scripts/claude_lint.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax lint *)
 metadata:
   author: alemax
   version: "1.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax lint` — `all`, `docs`, `skills`. The shipped entry point is
-`.claude/skills/alemax/skills/lint-all/scripts/claude_lint.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax lint` — `all`, `docs`, `skills`, `toolchain`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax lint <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `claude-consistency-lint`
 and the module's own docstrings. This body carries what a session must decide, and what
@@ -42,7 +41,7 @@ to report — restating the code here is how the two drift.
 
 ## Not for
 
-- Skills, command stubs and resolved absolute paths → `/alemax:lint-skills`; both at once →
+- Skills, command stubs and resolved absolute paths → `/alemax:lint-skills`; all three audits →
   `/alemax:lint-all`.
 - OpenSpec's own delta and scenario rules → `openspec validate --strict`, which owns them and
   says it better. C3 warns only so the triad is reported in one place.

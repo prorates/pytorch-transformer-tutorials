@@ -1,23 +1,21 @@
 ---
 name: complete-update
-description: Project-side completion of a meta delivery — run from the PROJECT's own Claude session. Reads the meta side's `.local/HANDOFF.md`, finds the update branch, says whether to cherry-pick or merge, reports the bootstrap collision, the `ci.yml` jobs belonging to a stack this project does not have, and the paths the delivery says meta no longer ships. This session then does what meta cannot: resolve conflicts with local context, re-lock, reconcile settings, run the tests, push. The project never clones the meta-repo. Consumer half of `/alemax:update-skills`.
+description: "Project-side completion of a meta delivery — run from the PROJECT's own Claude session. Reads the meta side's `.local/HANDOFF.md`, finds the update branch, says whether to cherry-pick or merge, reports the bootstrap collision, the `ci.yml` jobs belonging to a stack this project does not have, and the paths the delivery says meta no longer ships. This session then does what meta cannot: resolve conflicts with local context, re-lock, reconcile settings, run the tests, push. The project never clones the meta-repo. Consumer half of `/alemax:update-skills`. Use when `.local/HANDOFF.md` names a delivery for this project."
 license: MIT
-compatibility: Requires git, gh, and `uv` or `python3`. Runs in the project clone; refuses on a claude-meta clone.
+compatibility: Requires git, gh, and `uv`. Runs in the project clone; refuses on a claude-meta clone.
 context: project
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/complete-update/scripts/update.py *) Bash(python3 .claude/skills/alemax/skills/complete-update/scripts/update.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax update *) Bash(uv run --directory plugins/alemax alemax lint toolchain *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
 `alemax update <subcommand>` — `context`, `handoff`, `locate`, `citrim`, `stale`, each
-with `--json`. The shipped entry point is
-`.claude/skills/alemax/skills/complete-update/scripts/update.py`; run it from the project
-root with `uv run --script`, or `python3` in its place. It reads and reports; every
+with `--json`. Run it from the project root as
+`uv run --directory plugins/alemax alemax update <subcommand> …`. It reads and reports; every
 mutation below is a `git` line this session runs deliberately.
 
 Behaviour — exit codes, what each subcommand decides, why — is in
@@ -52,13 +50,38 @@ meta *stopped* shipping (propagation adds, never deletes).
    a substantive conflict; that judgement is the whole reason this runs here. After a
    config-file conflict, re-read the lines *after* the closing marker — git can move a
    shared trailing line outside the markers and silently reattach it to one side.
-5. **Finish per the handoff.** Re-lock if the manifest moved, then `reconcile-settings
-   check`, then `citrim` and `stale` — each prints the lines to run; run them and commit.
-   `stale` removes only what the handoff's § Superseded paths names.
+5. **Finish per the handoff.** Re-lock if a manifest moved (`uv lock` · `go mod tidy` ·
+   `cargo generate-lockfile` in each crate folder; a Maven project has no lockfile), and give a
+   crate folder with no `cargo` entry, or a Maven folder with no `maven` entry, in
+   `.github/dependabot.yml` one (`directory:` that folder) — a delivery can remove an
+   ecosystem but never add yours. Then `reconcile-settings check`, then `citrim` and `stale` —
+   each prints the lines to run; run them and commit.
+   `stale` removes only what the handoff's § Superseded paths names. Then
+   `uv run --directory plugins/alemax alemax lint toolchain`: relay each `below` line and its
+   fix (spec `toolchain-versions`).
+   Raising a version is this project's call, but a v1 `.golangci.yml` fails the delivered CI
+   lint job until `golangci-lint migrate` runs, and a ruff target below the minimum fails
+   pre-commit on the delivered Python.
 6. **Test, push, verify, clean up.** Your own checks, then push and confirm CI — on a
    billing-capped org a red run may never have executed, which is not a code failure.
    Delete the merged branch, remove the staged worktree (it lives in *your* repo), and
    name anything meta must re-broadcast.
+
+## When no human is watching
+
+`context` prints `autonomous=yes` when `alemax agent deliver` started this session (spec
+`agent-launcher`). Then the steps above run as written, with three changes:
+- **Never ask.** Where a step would ask, stop instead.
+- **Anything you would have asked about stops the run.** That covers a substantive conflict,
+  a failing check, refs you cannot choose between, or a command you are refused. Leave the
+  branch and the worktree as they are, and end with
+  `uv run --directory plugins/alemax alemax update result needs-operator <the question>`.
+- **A clean delivery lands.** With nothing substantive to resolve and the checks green, commit
+  the pick on `main`, push it, and end with `… alemax update result done <pin> <sha>`.
+
+When `locate` finds nothing, or the handoff's branch is gone, end with
+`… alemax update result nothing-to-apply <why>`. Make the line it prints your last reply,
+exactly as printed: the runner reads it.
 
 ## Not for
 

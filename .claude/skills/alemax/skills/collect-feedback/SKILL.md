@@ -1,22 +1,20 @@
 ---
 name: collect-feedback
-description: Drain `.local/feedback.md` from every active project in the operator's `projects.yaml` — plus the meta-repo itself, which is never a row in that file by design — and land the surviving findings as `[ ]` entries in `openspec/ideas.md` § Raw ideas via one canonical PR. `scripts/collect.py` parses the rows, offers dedup candidates and a harness-vs-meta suggestion per row, writes the entries and stamps each consumed source row so a re-run skips it. The three classification stages are the operator's, not the script's. Closes the cluster `/alemax:feedback` opens.
+description: Use when the operator asks to collect or drain feedback across the fleet. Drain `.local/feedback.md` from every active project in the operator's `projects.yaml` — plus the meta-repo itself, which is never a row in that file by design — and land the surviving findings as `[ ]` entries in `openspec/ideas.md` § Raw ideas via one canonical PR. `alemax collect` parses the rows, offers dedup candidates and a harness-vs-meta suggestion per row, writes the entries and stamps each consumed source row so a re-run skips it. The three classification stages are the operator's, not the script's. Closes the cluster `/alemax:feedback` opens.
 license: MIT
-compatibility: Requires git, gh, and `uv` or `python3`. No yq. Runs from the meta-repo clone; honors the canonical-only governance rule.
+compatibility: Requires git, gh, and `uv`. No yq. Runs from the meta-repo clone; honors the canonical-only governance rule.
 context: claude-meta-only
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/collect-feedback/scripts/collect.py *) Bash(python3 .claude/skills/alemax/skills/collect-feedback/scripts/collect.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax collect *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax collect` — `annotate`, `emit`, `scan`. The shipped entry point is
-`.claude/skills/alemax/skills/collect-feedback/scripts/collect.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax collect` — `annotate`, `emit`, `scan`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax collect <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `alemax-skills`
 and the module's own docstrings. This body carries what a session must decide, and what
