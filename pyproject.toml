@@ -80,11 +80,12 @@ target-version = "py312"
 # close to upstream rather than reformatting/relinting it. custom_datasets holds
 # one-off data-prep scripts and notebooks are out of scope for the lint baseline.
 #
-# .claude/ and bin/ hold Python delivered by claude-meta (propagation class M).
-# It is not ours to restyle: reformatting it desyncs the files from meta's copy,
-# so every later broadcast lands as a 3-way conflict on pure formatting. It is
-# linted upstream against meta's own config, not this repo's line-length.
-extend-exclude = ["model5.py", "custom_datasets", "*.ipynb", ".claude", "bin"]
+# .claude/, .agents/, bin/ and plugins/ hold Python delivered by claude-meta
+# (propagation class M). It is not ours to restyle: reformatting it desyncs the
+# files from meta's copy, so every later broadcast lands as a 3-way conflict on
+# pure formatting. It is linted upstream against meta's own config (Python 3.14
+# syntax), not this repo's py312 target or line-length.
+extend-exclude = ["model5.py", "custom_datasets", "*.ipynb", ".claude", ".agents", "bin", "plugins"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
@@ -98,9 +99,10 @@ strict = true
 warn_return_any = false
 disallow_untyped_calls = false
 # model5.py is vendored torch source; custom_datasets holds one-off prep scripts.
-# bin/ and .claude/ are claude-meta's delivered Python (propagation class M),
-# checked upstream against meta's own config — see the ruff note above.
-exclude = ['model5\.py', 'custom_datasets/', '^bin/', '^\.claude/']
+# bin/, .claude/, .agents/ and plugins/ are claude-meta's delivered Python
+# (propagation class M), checked upstream against meta's own config — see the
+# ruff note above.
+exclude = ['model5\.py', 'custom_datasets/', '^bin/', '^\.claude/', '^\.agents/', '^plugins/']
 
 # Third-party libs without (complete) type stubs.
 [[tool.mypy.overrides]]
