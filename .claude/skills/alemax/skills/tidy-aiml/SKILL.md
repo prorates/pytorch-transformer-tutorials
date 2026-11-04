@@ -1,23 +1,21 @@
 ---
 name: tidy-aiml
-description: Reshape the current per-volume operator branch (aiml0NN, app01, k8s01, iac01, …) into the canonical operator-state shape — origin/main + one commit per manifest yaml + any fork-divergent non-yaml commits cherry-picked on top. `scripts/tidy.py` carries the preflight, the duplicate-commit classification a fork session must read before syncing, and the plan; `meta/scripts/fork-tidy-aiml.sh` does the reshape, the tree-equivalence check and the force-push-with-lease. Use when `git log origin/main..<branch>` has drifted — several commits per yaml, mixed-file commits, merge commits from sync rounds.
+description: Use when `git log origin/main..{branch}` has drifted — several commits per yaml, mixed-file commits, merge commits from sync rounds. Reshape the current per-volume operator branch (aiml0NN, app01, k8s01, iac01, …) into the canonical operator-state shape — origin/main + one commit per manifest yaml + any fork-divergent non-yaml commits cherry-picked on top. `alemax tidy` carries the preflight, the duplicate-commit classification a fork session must read before syncing, and the plan; `meta/scripts/fork-tidy-aiml.sh` does the reshape, the tree-equivalence check and the force-push-with-lease.
 license: MIT
-compatibility: Requires bash, git, `uv` or `python3`, and a claude-meta fork clone with an `upstream` remote.
+compatibility: Requires bash, git, `uv`, and a claude-meta fork clone with an `upstream` remote.
 context: claude-meta-only
 argument-hint: "[--dry-run|--push]"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/tidy-aiml/scripts/tidy.py *) Bash(python3 .claude/skills/alemax/skills/tidy-aiml/scripts/tidy.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax tidy *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax tidy` — `apply`, `preflight`, `preview`. The shipped entry point is
-`.claude/skills/alemax/skills/tidy-aiml/scripts/tidy.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax tidy` — `apply`, `preflight`, `preview`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax tidy <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `alemax-tidy-aiml-skill`
 and the module's own docstrings. This body carries what a session must decide, and what

@@ -1,23 +1,21 @@
 ---
 name: archive-ideas
-description: Periodic reshape of this repo's `openspec/ideas.md` — snapshot it, then for each `[x]` entry in § Raw ideas classify it by the archived change's `proposal.md § Capabilities`, append a one-line bullet under each matching capability heading in § Archived ideas — by capability, and remove the full body from § Raw ideas. `scripts/ideas.py archive` does all of it, dry-run by default; the per-entry confirmation is this body's. Run when § Raw ideas has accumulated `[x]` entries (weekly, after N archives, before a demo).
+description: Run when § Raw ideas has accumulated `[x]` entries (weekly, after N archives, before a demo). Periodic reshape of this repo's `openspec/ideas.md` — snapshot it, then for each `[x]` entry in § Raw ideas classify it by the archived change's `proposal.md § Capabilities`, append a one-line bullet under each matching capability heading in § Archived ideas — by capability, and remove the full body from § Raw ideas. `alemax ideas archive` does all of it, dry-run by default; the per-entry confirmation is this body's.
 license: MIT
-compatibility: Requires git and `uv` or `python3`; `gh` only for the PR at the end. Operates exclusively under `openspec/`. Context-adaptive — in claude-meta the reshape lands by PR to canonical (Guardrail 2); in any other repo it lands against that repo's own origin.
+compatibility: Requires git and `uv`; `gh` only for the PR at the end. Operates exclusively under `openspec/`. Context-adaptive — in claude-meta the reshape lands by PR to canonical (Guardrail 2); in any other repo it lands against that repo's own origin.
 context: either
 argument-hint: "[--context <snapshot-suffix>] [--yes-all]"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/archive-ideas/scripts/ideas.py *) Bash(python3 .claude/skills/alemax/skills/archive-ideas/scripts/ideas.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax ideas *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax ideas` — `archive`, `list`, `reprioritise`. The shipped entry point is
-`.claude/skills/alemax/skills/archive-ideas/scripts/ideas.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax ideas` — `archive`, `list`, `reprioritise`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax ideas <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `alemax-skills`
 and the module's own docstrings. This body carries what a session must decide, and what
@@ -25,7 +23,7 @@ to report — restating the code here is how the two drift.
 
 ## Steps
 
-1. **See the plan.** `uv run --script .claude/skills/alemax/skills/archive-ideas/scripts/ideas.py archive`
+1. **See the plan.** `uv run --directory plugins/alemax alemax ideas archive`
    — dry-run by default: each `[x]` entry with the capability it resolved to and the tier it used
    (1 inline pointer · 2 body slug-mention · 3 operator), then what it could not classify.
 2. **Confirm each row** (`y` / `skip` / `edit`) — with `--yes-all`, only the unresolved ones. `skip`

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.9"
+# requires-python = ">=3.14"
 # dependencies = []
 # ///
 """path-literal-check.py — variables, never resolved paths (claude-meta spec `claude-consistency-lint`).
@@ -58,13 +58,13 @@ refuses in the instruction scope and warns in a spec.
 
 A line carrying `path-literal-ok` (an operator-stated exception) or
 `path-literal-docs` (the line documents this rule, or is test data) is skipped —
-the same line-local idiom `meta/scripts/hooks/system-path-rule-check.sh` already
+the same line-local idiom `meta/scripts/hooks/system-path-rule-check.sh` already  # shipped-path-provenance
 ships, for the same reason: a rule's own worked examples and a self-test's fixtures
 are not instructions, and annotating the line is cheaper and more reviewable than
 teaching the matcher about docstrings and test bodies.
 
 This does NOT collide with the `system-path-rule` (spec `alemax-skills`, hook
-`meta/scripts/hooks/system-path-rule-check.sh`), which requires macOS-mediated paths
+`meta/scripts/hooks/system-path-rule-check.sh`), which requires macOS-mediated paths  # shipped-path-provenance
 to be spelled `/Users/$(whoami)/Library/…` LITERALLY rather than through `$HOME`.
 `$(whoami)` is an interpolation, so the identity segment is generic and this check
 passes it. The two rules meet exactly at the account name and agree on it.
@@ -115,7 +115,7 @@ MARKER_RE = re.compile(r"path-literal-(?:ok|docs)")
 ROOT_DOCS = ("claude.md", "readme.md", "architecture.md")
 SCANNED_SUFFIXES = (".md", ".py", ".sh")
 # A directory whose contents a session reads as instruction, wherever it sits in the
-# tree — so both `.claude/rules/` and `scaffolding/claude/rules/` match.
+# tree — so both `.claude/rules/` and `scaffolding/.claude/rules/` match.
 INSTRUCTION_DIRS = ("claude/commands/", "claude/rules/", "claude/hooks/")
 # `.local/` is the fleet's gitignored operator scratch (spec `scaffolding-boundary`): a session's
 # notes and fixtures live there and are nobody's instructions.
@@ -191,7 +191,7 @@ def git(repo: Path, *args: str) -> str | None:
         done = subprocess.run(
             ["git", *args], cwd=str(repo), check=True, capture_output=True, text=True
         )
-    except (OSError, subprocess.CalledProcessError):
+    except OSError, subprocess.CalledProcessError:
         return None
     return done.stdout
 
@@ -281,7 +281,7 @@ def marker_covered_lines(text: str, rel: str) -> set[int]:
                 continue
             if first is None and tok.type != tokenize.COMMENT:
                 first = tok.start[0]
-    except (tokenize.TokenError, IndentationError, SyntaxError):
+    except tokenize.TokenError, IndentationError, SyntaxError:
         # Unparseable file: fall back to the line-local behaviour rather than
         # exempting a span we could not establish.
         pass

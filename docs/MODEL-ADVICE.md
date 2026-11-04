@@ -2,7 +2,7 @@
 
 _Fetched 2026-09-04. A **lookup**, not a rule: read the row for the model in use before rewriting an
 instruction, and never rewrite one because a row exists. Advice about the repo is durable; advice about
-the model is not. Delivered from claude-meta (`meta/docs/MODEL-ADVICE.md`, class M) — a local edit
+the model is not. Delivered from claude-meta (`meta/docs/MODEL-ADVICE.md`, class M) — a local edit <!-- shipped-path-provenance -->
 survives the 3-way merge, but say why in the commit or the next refresh will read as a conflict._
 
 | model | since | what Anthropic changed | what it means for an artifact here |

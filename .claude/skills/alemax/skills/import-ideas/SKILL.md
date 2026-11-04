@@ -1,23 +1,21 @@
 ---
 name: import-ideas
-description: Drain an Obsidian vault of mobile-captured ideas — `scripts/vault.py` resolves the vault (`users.yaml ideas_on_the_go_vault`, else Obsidian's iCloud container), walks it for `ideas-on-the-go(-<project>)?.md`, routes each file by its filename (cross-cutting → canonical claude-meta · existing-project → that project · unknown → offer to bootstrap it), lists the pending rows, and rewrites each consumed row atomically. Per row the only question is import or skip-personal; the filename already decided the route. Use after dictating ideas on mobile and wanting to triage them on the desktop.
+description: Use after dictating ideas on mobile and wanting to triage them on the desktop. Drain an Obsidian vault of mobile-captured ideas — `alemax vault` resolves the vault (`users.yaml ideas_on_the_go_vault`, else Obsidian's iCloud container), walks it for `ideas-on-the-go(-{project})?.md`, routes each file by its filename (cross-cutting → canonical claude-meta · existing-project → that project · unknown → offer to bootstrap it), lists the pending rows, and rewrites each consumed row atomically. Per row the only question is import or skip-personal; the filename already decided the route.
 license: MIT
-compatibility: Requires git, gh, and `uv` or `python3`. No yq. Meta-repo clone, or a project clone with `--only <project>`.
+compatibility: Requires git, gh, and `uv`. No yq. Meta-repo clone, or a project clone with `--only <project>`.
 context: claude-meta-only
 argument-hint: "[--dry-run] [--only <project>]"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/import-ideas/scripts/vault.py *) Bash(python3 .claude/skills/alemax/skills/import-ideas/scripts/vault.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax vault *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax vault` — `annotate`, `scan`, `vault`. The shipped entry point is
-`.claude/skills/alemax/skills/import-ideas/scripts/vault.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax vault` — `annotate`, `scan`, `vault`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax vault <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `mobile-capture`
 and the module's own docstrings. This body carries what a session must decide, and what

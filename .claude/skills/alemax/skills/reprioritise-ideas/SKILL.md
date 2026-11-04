@@ -1,23 +1,21 @@
 ---
 name: reprioritise-ideas
-description: Curate § Suggested next-up of this repo's `openspec/ideas.md` — walk § Raw ideas for `[ ]` entries, present them with one-line summaries, let the operator pick 3–5, and write pointer-only entries (`- <slug> — <summary>`). Each run replaces the section; `--add` appends instead and `--clear` empties it. `scripts/ideas.py reprioritise` does the writing, dry-run by default. Never touches § Archived ideas or § Raw ideas content. Operator-triggered, often before a planning session.
+description: Use when the operator asks to pick what comes next, often before a planning session. Curate § Suggested next-up of this repo's `openspec/ideas.md` — walk § Raw ideas for `[ ]` entries, present them with one-line summaries, let the operator pick 3–5, and write pointer-only entries (`- {slug} — {summary}`). Each run replaces the section; `--add` appends instead and `--clear` empties it. `alemax ideas reprioritise` does the writing, dry-run by default. Never touches § Archived ideas or § Raw ideas content.
 license: MIT
-compatibility: Requires git and `uv` or `python3`; `gh` only for the PR at the end. Operates exclusively under `openspec/`. Context-adaptive — in claude-meta the curation lands by PR to canonical (Guardrail 2); in any other repo it lands against that repo's own origin.
+compatibility: Requires git and `uv`; `gh` only for the PR at the end. Operates exclusively under `openspec/`. Context-adaptive — in claude-meta the curation lands by PR to canonical (Guardrail 2); in any other repo it lands against that repo's own origin.
 context: either
 argument-hint: "[--add] [--clear]"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/archive-ideas/scripts/ideas.py *) Bash(python3 .claude/skills/alemax/skills/archive-ideas/scripts/ideas.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax ideas *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax ideas` — `archive`, `list`, `reprioritise`. The shipped entry point is
-`.claude/skills/alemax/skills/archive-ideas/scripts/ideas.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax ideas` — `archive`, `list`, `reprioritise`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax ideas <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `alemax-skills`
 and the module's own docstrings. This body carries what a session must decide, and what
@@ -25,7 +23,7 @@ to report — restating the code here is how the two drift.
 
 ## Steps
 
-1. **Show the backlog.** `uv run --script .claude/skills/alemax/skills/archive-ideas/scripts/ideas.py reprioritise`
+1. **Show the backlog.** `uv run --directory plugins/alemax alemax ideas reprioritise`
    with no `--pick` prints the numbered `[ ]` entries (slug + one-line summary) and what
    § Suggested next-up holds today. Zero `[ ]` entries → it says so; nothing to curate.
 2. **Ask for 3–5**, by index or slug. An unknown slug is refused by name — re-ask, never
