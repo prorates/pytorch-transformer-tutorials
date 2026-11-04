@@ -1,23 +1,22 @@
 ---
 name: lint-all
-description: Run both consistency audits — documents and skills — over this repo and print one summary; non-zero if either refuses. The one to invoke when the question is simply "is this repo still consistent with itself?", and the one to run before a broadcast or a release.
+description: Run all three audits — documents, skills and the toolchain level — over this repo and print one summary; non-zero if any refuses. The one to invoke when the question is simply "is this repo still consistent with itself?", and the one to run before a broadcast or a release.
 license: MIT
-compatibility: Requires git and `uv` or `python3`. Runs in a claude-meta clone or any bootstrapped project; the checkers ship as class-M `bin/**`, so a project that predates them is told to run `/alemax:complete-update` rather than failing.
+compatibility: Requires git and `uv`. Runs in a claude-meta clone or any bootstrapped project; the checkers ship as class-M `bin/**`, so a project that predates them is told to run `/alemax:complete-update` rather than failing.
 context: either
 argument-hint: "[--strict] [--include-specs] [--repo <path>] [--list]"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/lint-all/scripts/claude_lint.py *) Bash(python3 .claude/skills/alemax/skills/lint-all/scripts/claude_lint.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax lint *)
 metadata:
   author: alemax
   version: "1.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax lint` — `all`, `docs`, `skills`. The shipped entry point is
-`.claude/skills/alemax/skills/lint-all/scripts/claude_lint.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax lint` — `all`, `docs`, `skills`, `toolchain`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax lint <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `claude-consistency-lint`
 and the module's own docstrings. This body carries what a session must decide, and what
@@ -34,11 +33,13 @@ to report — restating the code here is how the two drift.
    way, so report the warning count as well as the exit status — the number that matters is the
    change since the last run. `--strict` before a broadcast or a release.
 4. **Fix nothing without asking**, then hand back to the half that owns the fix —
-   `/alemax:lint-docs` or `/alemax:lint-skills` carries the per-rule guidance.
+   `/alemax:lint-docs`, `/alemax:lint-skills` or `/alemax:lint-toolchain` carries the per-rule
+   guidance.
 
 ## Not for
 
-- One half only → `/alemax:lint-docs` · `/alemax:lint-skills`.
-- Whether a project is stale on the class-M set → `meta/scripts/meta-status.sh`; a delivery →
-  `/alemax:update-skills` then, in the project's own session, `/alemax:complete-update`.
+- One audit only → `/alemax:lint-docs` · `/alemax:lint-skills` · `/alemax:lint-toolchain`.
+- Whether a project is stale on the class-M set → ask the meta-repo session to run its
+  status check; a delivery → `/alemax:update-skills` then, in the project's own session,
+  `/alemax:complete-update`.
 - A finding worth keeping rather than fixing now → `/alemax:feedback`.

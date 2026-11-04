@@ -1,23 +1,21 @@
 ---
 name: update-skills
-description: Meta-side fleet broadcast of the class-M artifact set — `scripts/broadcast.py` computes the COMPLETE set from `scaffolding/propagation-policy.yaml` (or a `--since <ref>` delta, or explicit `--path`s), says whether the delivery is COMPLETE or PARTIAL — which is what decides whether each project's `.meta-version` advances — and drives `meta/scripts/broadcast-update.sh`. It stages one unresolved `[base @ pin <- update]` branch per active project plus a persistent `../<project>-claude-meta` worktree and a short handoff, and opens NO PR. Meta never merges and never resolves: every delivered project finishes from its own session via `/alemax:complete-update`.
+description: "Use when the operator asks to broadcast skill and template updates to the fleet. Meta-side fleet broadcast of the class-M artifact set — `alemax broadcast` computes the COMPLETE set from `scaffolding/propagation-policy.yaml` (or a `--since {ref}` delta, or explicit `--path`s), says whether the delivery is COMPLETE or PARTIAL — which is what decides whether each project's `.meta-version` advances — and drives `meta/scripts/broadcast-update.sh`. It stages one unresolved `[base @ pin <- update]` branch per active project plus a persistent `../{project}-claude-meta` worktree and a short handoff, and opens NO PR. Meta never merges and never resolves: every delivered project finishes from its own session via `/alemax:complete-update`."
 license: MIT
-compatibility: Requires bash, git, gh, and `uv` or `python3`. No yq. Runs from a FORK claude-meta clone on its per-volume branch — the manifest it reads is fork-divergent.
+compatibility: Requires bash, git, gh, and `uv`. No yq. Runs from a FORK claude-meta clone on its per-volume branch — the manifest it reads is fork-divergent.
 context: claude-meta-only
 argument-hint: "[--dry-run] [--since <ref>] [--path <p>]"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/update-skills/scripts/broadcast.py *) Bash(python3 .claude/skills/alemax/skills/update-skills/scripts/broadcast.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax broadcast *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax broadcast` — `plan`, `preflight`, `run`. The shipped entry point is
-`.claude/skills/alemax/skills/update-skills/scripts/broadcast.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax broadcast` — `plan`, `preflight`, `run`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax broadcast <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `alemax-scaffolding-sync`
 and the module's own docstrings. This body carries what a session must decide, and what

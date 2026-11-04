@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.9"
+# requires-python = ">=3.14"
 # dependencies = []
 # ///
 """scope-guard.py — PreToolUse hook: a session acts only inside its own repo.
@@ -23,6 +23,11 @@ Inside scope, always:
   - toolchains: `/opt/homebrew`, `/Volumes/*/opt`, `/usr`, `/bin`, `/sbin`,
     `/etc`, `/dev`
   - `$HOME/.claude/**`, `$HOME/.cache`, `$HOME/.local/share/uv`
+  - READ-ONLY: `$HOME/.claude.json`, `$HOME/.local/bin`, `$HOME/.local/share/claude` —
+    what the harness's own `/doctor` inspects (install method, duplicate installs, PATH,
+    usage counters). Only a write-free reader (`HOME_READ_VERBS`: `cat`, `ls`, `jq`, …)
+    or a read tool reaches them; `sort -o`, `yq -i`, any other verb or a write tool is
+    still refused
   - every path listed in `<root>/.local/scope-allow.txt` — one path per line,
     `#` comments, `~` allowed, a directory covers its subtree. The operator's
     exception list: the study's `<repo>/.local/study*/…/answer.md` reads live here.
@@ -42,6 +47,11 @@ prod clone (`prod: <path>` in the marker, default `$HOME/Applications/<repo>`),
 under a data root the prod clone declares (`data: <path>` lines in ITS marker),
 or under a tree the tracked `<root>/data.yaml` declares `env: prod` (spec
 `data-repo-convention`) is refused — even when `scope-allow.txt` lists the path.
+One exception, the dev→prod notes channel (spec `session-confinement`, design D8):
+a dev write to THIS clone's own prod clone's `.local/tracking-*.md` or anything
+under its `.local/msg/` is allowed. Nothing else in that `.local/` (`env`,
+`scope-allow.txt`, `settings.local.proposed.json`, …), no other repo's prod clone,
+and no data root's `.local/`.
 `data.yaml` is the declaration every clone of the repo shares; the marker's
 `data:` / `prod-data:` lines stay as the additive per-machine override. `both`
 and `dev` trees are writable from a dev session. A malformed `data.yaml`, or an
@@ -50,13 +60,23 @@ row — never a block: `bin/data-check.py` (pre-commit, on a staged `data.yaml`)
 is where the declaration fails loudly. Reads are not the environment rule's
 business; the scope rule decides those.
 
+Prose is not a path list: on `git commit|tag|merge|stash|notes`, `gh` and `alemax`, a
+multi-word argument to a message flag (`-m`, `--message`, `--body`, `--title`,
+`--context`, `--description`, `--detail`) or the free text after `feedback add` /
+`presence send` is never opened, so a path quoted in a sentence there is not refused.
+The skip ends at the next `;`, `&&`, `|`, `(` or newline, and never covers an argument
+carrying a `$(…)` or backtick substitution. On any other command `-m` is that
+command's own flag (`touch -m`, `ls -m`, `sort -m`) and the path after it is checked.
+
 What it cannot see: a path inside a script the command runs, an unknown `$VAR`,
 a relative path buried in an argument. It is enforced against command text, not
-effect — the sandbox is the fence for effect. A guard that crashes must not brick
-a session: any parse or runtime failure is exit 0 with a `scope-guard: note:` on
-stderr (fail open).
+effect. A guard that crashes must not brick a session, nor wave a write through:
+unparseable input, and any failure while judging a read, is exit 0 with a
+`scope-guard: note:` on stderr (fail open); a failure while judging a write — Edit,
+Write, MultiEdit, NotebookEdit, or a Bash call already classed write-shaped — is
+exit 2 with `scope-guard: refused (guard error: …)` (fail closed, design D6).
 
-    python3 .claude/hooks/scope-guard.py            # the hook form (stdin = hook JSON)
+    uv run --quiet --script .claude/hooks/scope-guard.py   # the hook form (stdin = hook JSON)
     uv run --script .claude/hooks/scope-guard.py --self-test   # fixture cases, exit 0/1
 """
 
@@ -88,6 +108,20 @@ SYSTEM_PREFIXES = (
     "/dev",
 )
 HOME_SUBDIRS = (".claude", ".cache", os.path.join(".local", "share", "uv"))
+HOME_READ_ONLY = (
+    ".claude.json",
+    os.path.join(".local", "bin"),
+    os.path.join(".local", "share", "claude"),
+)
+PROSE_FLAGS = frozenset(
+    ["-m", "--message", "--body", "--title", "--context", "--description", "--detail"]
+)
+PROSE_VERBS = (("feedback", "add"), ("presence", "send"))
+GIT_MESSAGE_SUBS = frozenset(["commit", "tag", "merge", "stash", "notes"])
+# Shell punctuation that shlex should hand back as a word of its own; a word made of it
+# that holds one of SEGMENT_CHARS (or is `&&` / `&`) ends a segment.
+SHELL_PUNCT = "();<>|&\n"
+SEGMENT_CHARS = ";|()\n"
 EXPANDED_VARS = ("CLAUDE_PROJECT_DIR", "HOME", "TMPDIR", "PWD")
 
 # An absolute or ~-prefixed token. The lookbehind keeps URL tails (`https://h/p`),
@@ -186,6 +220,42 @@ READ_ONLY_VERBS = frozenset(
         "column",
         "openspec",
         "gh",
+    ]
+)
+# The verbs trusted on a HOME_READ_ONLY path. Narrower than READ_ONLY_VERBS, which only
+# decides whether a dev session writes into prod: `sort -o`, `uniq in out`, `yq -i`,
+# `awk -i inplace`, `tree -o`, `xxd -r`, `rg --pre`, `find -fprint` and
+# `gh release download -D` each write, and on `~/.claude.json` or `~/.local/bin` the
+# file written is the harness's own config or its launcher.
+HOME_READ_VERBS = frozenset(
+    [
+        "cat",
+        "head",
+        "tail",
+        "grep",
+        "egrep",
+        "fgrep",
+        "ls",
+        "stat",
+        "wc",
+        "diff",
+        "cmp",
+        "file",
+        "test",
+        "[",
+        "[[",
+        "jq",
+        "md5",
+        "md5sum",
+        "shasum",
+        "sha256sum",
+        "du",
+        "which",
+        "type",
+        "realpath",
+        "readlink",
+        "basename",
+        "dirname",
     ]
 )
 GIT_READ_ONLY = frozenset(
@@ -308,7 +378,7 @@ def git_toplevel(cwd: str) -> str | None:
             text=True,
             timeout=5,
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return None
     top = done.stdout.strip()
     return top or None
@@ -374,6 +444,7 @@ class Scope:
         self.allow.extend(SYSTEM_PREFIXES)
         for sub in HOME_SUBDIRS:
             self.allow.append(os.path.join(self.home, sub))
+        self.read_only = [os.path.join(self.home, sub) for sub in HOME_READ_ONLY]
         self.allow_files: list[str] = []
         for r in self.roots:
             f = os.path.join(r, ".local", "scope-allow.txt")
@@ -389,12 +460,14 @@ class Scope:
         self.env_marker = os.path.join(self.root, ".local", "env")
         self.prod_deny: list[str] = []
         self.data_deny: list[tuple[str, str]] = []
+        self.own_prod: list[str] = []
         self.notes: list[str] = []
         if self.env_label == "dev":
             prod_clones = marker.get("prod") or []
             default = os.path.join(self.home, "Applications", os.path.basename(self.root))
             if not prod_clones and os.path.isdir(default):
                 prod_clones = [default]
+            self.own_prod = [norm(pc, self.root, self.home) for pc in prod_clones]
             for pc in prod_clones:
                 self.prod_deny.append(pc)
                 _, _, pinfo = env_of(pc, self.home)
@@ -420,12 +493,35 @@ class Scope:
                 return True
         return False
 
+    def read_only_allowed(self, path: str) -> bool:
+        return any(under(path, p) for p in self.read_only)
+
+    def prod_channel(self, path: str) -> bool:
+        """True for this dev clone's own prod clone's notes channel: `.local/tracking-*.md`
+        and anything under `.local/msg/` (spec session-confinement, design D8). Nothing else
+        in the prod clone's `.local/` — `env`, `scope-allow.txt` and the proposed settings
+        decide how prod is guarded — and never another repo's prod clone."""
+        for pc in self.own_prod:
+            for p, base in ((path, pc), (real(path), real(pc))):
+                local = os.path.join(base, ".local")
+                if under(p, os.path.join(local, "msg")):
+                    return True
+                if os.path.dirname(p) == local and re.fullmatch(
+                    r"tracking-[^/]*\.md", os.path.basename(p)
+                ):
+                    return True
+        return False
+
     def prod_protected(self, path: str) -> str | None:
         """None when the path is not prod-protected; otherwise the phrase that says what
         protects it, for the refusal line."""
+        rp = real(path)
+        if self.prod_channel(path) and not any(
+            under(path, p) or under(rp, real(p)) for p, _ in self.data_deny
+        ):
+            return None
         if "Applications" in Path(path).parts:
             return PROD_CLONE_WHY
-        rp = real(path)
         if any(under(path, p) or under(rp, real(p)) for p in self.prod_deny):
             return PROD_CLONE_WHY
         for p, name in self.data_deny:
@@ -655,11 +751,94 @@ def verb_of(segment: str) -> list[str]:
         words = shlex.split(segment, posix=True)
     except ValueError:
         words = segment.split()
+    return command_words(words)
+
+
+def command_words(words: list[str]) -> list[str]:
+    """`words` without the leading `VAR=value` assignments and prefix words (`env`, `sudo`, …)."""
     while words and (
         re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", words[0]) or words[0] in COMMAND_PREFIX_WORDS
     ):
         words = words[1:]
     return words
+
+
+def shell_words(text: str) -> list[str]:
+    """shlex words of a command line, with each run of shell punctuation outside quotes
+    (`&&`, `;`, `|`, `(`, a newline, `>`) as a word of its own, so a segment boundary
+    shows even when written without spaces (`a&&b`)."""
+    lex = shlex.shlex(text, posix=True, punctuation_chars=SHELL_PUNCT)
+    lex.whitespace = " \t\r"
+    lex.whitespace_split = True
+    lex.commenters = ""
+    try:
+        return list(lex)
+    except ValueError:
+        return text.split()
+
+
+def ends_segment(word: str) -> bool:
+    if not word or any(c not in SHELL_PUNCT for c in word):
+        return False
+    return any(c in SEGMENT_CHARS for c in word) or "&&" in word or word == "&"
+
+
+def split_segments(words: list[str]) -> list[list[str]]:
+    out: list[list[str]] = [[]]
+    for w in words:
+        if ends_segment(w):
+            out.append([])
+        else:
+            out[-1].append(w)
+    return [seg for seg in out if seg]
+
+
+def git_subcommand(cmd: list[str]) -> str:
+    """The subcommand of a `git …` word list, past `-C <dir>` / `-c <k=v>` and other flags."""
+    rest = iter(cmd[1:])
+    for w in rest:
+        if w in ("-C", "-c"):
+            next(rest, None)
+        elif not w.startswith("-"):
+            return w
+    return ""
+
+
+def prose_indices(seg: list[str]) -> set[int]:
+    """Indices of the words in ONE segment that are prose — a sentence handed to a
+    message flag, or the free text after `feedback add` / `presence send` — and so are
+    never opened. Only on the commands whose flags carry a message: `-m` is a message on
+    `git commit` but its own flag on `touch`, `ls`, `sort`, `rsync` and `zip`. Only a
+    multi-word argument qualifies, and never one carrying a command substitution."""
+    cmd = command_words(seg)
+    off = len(seg) - len(cmd)
+    names = [os.path.basename(w) for w in cmd]
+    alemax = "alemax" in names
+    git_sub = git_subcommand(cmd) if names[:1] == ["git"] else ""
+    if not (alemax or names[:1] == ["gh"] or git_sub in GIT_MESSAGE_SUBS):
+        return set()
+    prose_after = len(cmd)
+    if alemax:
+        for i in range(len(cmd) - 1):
+            if (cmd[i], cmd[i + 1]) in PROSE_VERBS:
+                prose_after = min(prose_after, i + 2)
+    out: set[int] = set()
+    for i, w in enumerate(cmd):
+        if not any(c.isspace() for c in w) or "$(" in w or "`" in w:
+            continue
+        if i >= prose_after or (i > 0 and cmd[i - 1] in PROSE_FLAGS):
+            out.add(i + off)
+    return out
+
+
+def home_readable(text: str) -> bool:
+    """Is every segment of the command a HOME_READ_VERBS reader — the only shape allowed
+    on a HOME_READ_ONLY path?"""
+    for seg in segments(text):
+        words = verb_of(seg)
+        if words and os.path.basename(words[0]) not in HOME_READ_VERBS:
+            return False
+    return True
 
 
 def segment_is_read_only(words: list[str]) -> bool:
@@ -734,8 +913,10 @@ def looks_like_real_path(token: str) -> bool:
         return False
 
 
-def bash_candidates(command: str, scope: Scope, env: dict) -> tuple[list[tuple[str, str]], bool]:
-    """(candidates, write_shaped). Kinds: 'cd', 'path', 'redirect'."""
+def bash_candidates(
+    command: str, scope: Scope, env: dict
+) -> tuple[list[tuple[str, str]], bool, bool]:
+    """(candidates, write_shaped, home_readable). Kinds: 'cd', 'path', 'redirect'."""
     text = expand_vars(strip_heredocs(command), env)
     cands: list[tuple[str, str]] = []
     for m in CD_RE.finditer(text):
@@ -751,10 +932,10 @@ def bash_candidates(command: str, scope: Scope, env: dict) -> tuple[list[tuple[s
         if target.startswith("&"):
             continue
         cands.append((norm(target, scope.cwd, scope.home), "redirect"))
-    try:
-        tokens = shlex.split(text, posix=True)
-    except ValueError:
-        tokens = text.split()
+    tokens: list[str] = []
+    for seg in split_segments(shell_words(text)):
+        prose = prose_indices(seg)  # a sentence handed to a message flag is never opened
+        tokens.extend(w for i, w in enumerate(seg) if i not in prose)
     for tok in tokens:
         for m in PATH_TOKEN.finditer(tok):
             token = m.group(1)
@@ -771,7 +952,7 @@ def bash_candidates(command: str, scope: Scope, env: dict) -> tuple[list[tuple[s
     write_shaped = any(not segment_is_read_only(verb_of(seg)) for seg in segments(text)) or any(
         k == "redirect" for _, k in cands
     )
-    return cands, write_shaped
+    return cands, write_shaped, home_readable(text)
 
 
 # --- decisions ---------------------------------------------------------------------
@@ -794,16 +975,23 @@ def address_hint(path: str) -> str:
     return f"/alemax:send-msg {drive} {repo}"
 
 
+# Set once decide() has classed the call, so a guard error after that point can fail
+# closed for a write (design D6): `run_hook` reads it in its error path.
+JUDGING = {"write": False}
+
+
 def decide(tool: str, tool_input: dict, scope: Scope, env: dict) -> tuple[int, str]:
     if tool == "Bash":
         command = tool_input.get("command")
         if not isinstance(command, str) or not command.strip():
             return EXIT_ALLOW, ""
-        cands, write_shaped = bash_candidates(command, scope, env)
+        cands, write_shaped, reader = bash_candidates(command, scope, env)
     elif tool in FILE_TOOLS:
         cands, write_shaped = file_tool_candidates(tool, tool_input, scope), tool in WRITE_TOOLS
+        reader = not write_shaped
     else:
         return EXIT_ALLOW, ""
+    JUDGING["write"] = write_shaped or any(kind in ("redirect", "write") for _, kind in cands)
     hint = ""
     for path, kind in cands:
         writes = kind in ("redirect", "write") or (kind == "path" and write_shaped)
@@ -815,7 +1003,7 @@ def decide(tool: str, tool_input: dict, scope: Scope, env: dict) -> tuple[int, s
                 f"; ask the prod session — `{address_hint(path)}@prod` "
                 f"(questions and proposals only)."
             )
-        if scope.allowed(path):
+        if scope.allowed(path) or (not writes and reader and scope.read_only_allowed(path)):
             continue
         what = f"`cd {path}`" if kind == "cd" else f"{tool} of {path}"
         allow_file = os.path.join(scope.root, ".local", "scope-allow.txt")
@@ -832,6 +1020,11 @@ def decide(tool: str, tool_input: dict, scope: Scope, env: dict) -> tuple[int, s
 def evaluate(payload: dict, env: dict, default_cwd: str) -> tuple[int, str]:
     tool = payload.get("tool_name")
     tool_input = payload.get("tool_input")
+    if isinstance(tool, str) and tool in WRITE_TOOLS and not isinstance(tool_input, dict):
+        return EXIT_BLOCK, (
+            f"scope-guard: refused {tool} (guard error: tool_input is not an object) — "
+            "a write the guard cannot judge does not run"
+        )
     if not isinstance(tool, str) or not isinstance(tool_input, dict):
         return EXIT_ALLOW, "scope-guard: note: no tool_name/tool_input in hook input — allowing"
     cwd = (
@@ -855,9 +1048,19 @@ def run_hook() -> int:
     except (ValueError, OSError) as exc:
         print(f"scope-guard: note: could not parse hook input ({exc}) — allowing", file=sys.stderr)
         return EXIT_ALLOW
+    # The tool is known before anything that can fail, so an error while judging a write
+    # refuses it (design D6). A read, and input the guard cannot parse, still fail open:
+    # a guard defect must never stop a session from reading.
+    tool = payload.get("tool_name")
+    JUDGING["write"] = False
     try:
         code, message = evaluate(payload, dict(os.environ), os.getcwd())
     except Exception as exc:
+        if tool in WRITE_TOOLS or (tool == "Bash" and JUDGING["write"]):
+            print(
+                f"scope-guard: refused (guard error: {type(exc).__name__}: {exc})", file=sys.stderr
+            )
+            return EXIT_BLOCK
         print(
             f"scope-guard: note: guard failed ({type(exc).__name__}: {exc}) — allowing",
             file=sys.stderr,
@@ -1087,6 +1290,60 @@ def self_test() -> int:
             2,
             "dev",
         )
+        # --- the dev→prod notes channel (design D8): only tracking-*.md and msg/** ---
+        prod_local = os.path.join(prod, ".local")
+        check(
+            "dev Write to its prod clone's .local/tracking-12.md → allow (the channel)",
+            call("Write", file_path=os.path.join(prod_local, "tracking-12.md"), content="x"),
+            0,
+        )
+        check(
+            "dev Write under its prod clone's .local/msg/ → allow (the channel)",
+            call(
+                "Write",
+                file_path=os.path.join(prod_local, "msg", "2026-11-04-brief.md"),
+                content="x",
+            ),
+            0,
+        )
+        check(
+            "dev Bash redirect into its prod clone's tracking file → allow",
+            call("Bash", command=f"echo x >> {prod_local}/tracking-12.md"),
+            0,
+        )
+        check(
+            "dev Write to its prod clone's .local/env → block (prod's marker)",
+            call("Write", file_path=os.path.join(prod_local, "env"), content="dev\n"),
+            2,
+            "dev",
+        )
+        check(
+            "dev Write to its prod clone's .local/scope-allow.txt → block (prod's widening)",
+            call("Write", file_path=os.path.join(prod_local, "scope-allow.txt"), content="/\n"),
+            2,
+            "dev",
+        )
+        check(
+            "dev Edit of its prod clone's .local/settings.local.proposed.json → block",
+            call("Edit", file_path=os.path.join(prod_local, "settings.local.proposed.json")),
+            2,
+            "dev",
+        )
+        check(
+            "dev Write to its prod clone's .local/resume.md → block (not the channel)",
+            call("Write", file_path=os.path.join(prod_local, "resume.md"), content="x"),
+            2,
+            "dev",
+        )
+        other_prod = os.path.join(users, "Applications", "other-repo", ".local")
+        set_allow([prod, prod_data, other_prod])
+        check(
+            "dev Write to ANOTHER repo's prod .local/tracking-1.md → block, even with scope-allow",
+            call("Write", file_path=os.path.join(other_prod, "tracking-1.md"), content="x"),
+            2,
+            "dev",
+        )
+        set_allow([prod, prod_data])
         set_marker("prod\n")
         check(
             "Edit under Applications/ with env=prod (declared) → allow",
@@ -1253,12 +1510,148 @@ def self_test() -> int:
             call("Bash", command="grep x " + os.path.join(other, "CLAUDE.md")),
             2,
         )
-        # --- fail open ---
+        check(
+            "a path quoted in a feedback sentence is prose, not a path",
+            call(
+                "Bash",
+                command="uv run alemax feedback add --kind friction 'the folder becomes "
+                + os.path.join(other, "plugins")
+                + " here'",
+            ),
+            0,
+        )
+        check(
+            "a path quoted in a commit message is prose, not a path",
+            call("Bash", command="git commit -m 'moved from " + other + " to here'"),
+            0,
+        )
+        check(
+            "a single-word argument after a message flag is still a path",
+            call("Bash", command="git commit -m " + os.path.join(other, "msg.txt")),
+            2,
+        )
+        spaced = os.path.join(other, "Mobile Documents", "x")
+        check(
+            "a path quoted in a commit message after `git -C` is prose",
+            call("Bash", command=f"git -C {root} commit -m 'moved from {other} to here'"),
+            0,
+        )
+        check(
+            "prose ends at `&&` — the next command's spaced path is checked",
+            call("Bash", command=f"uv run alemax feedback add 'note' && rm -rf '{spaced}'"),
+            2,
+        )
+        check(
+            "prose ends at `;` written without spaces",
+            call("Bash", command=f"git commit -m 'a b';cat '{spaced}'"),
+            2,
+        )
+        check(
+            "`touch -m` takes no message — its spaced path is checked",
+            call("Bash", command=f"touch -m '{spaced}'"),
+            2,
+        )
+        check(
+            "`ls -m` takes no message — its spaced path is checked",
+            call("Bash", command=f"ls -m '{spaced}'"),
+            2,
+        )
+        check(
+            "a `$(…)` inside a commit message is not prose",
+            call("Bash", command=f"git commit -m \"x $(cat '{spaced}')\""),
+            2,
+        )
+        claude_json = os.path.join(home, ".claude.json")
+        check(
+            "/doctor's read of ~/.claude.json → allow",
+            call("Bash", command="jq empty " + claude_json),
+            0,
+        )
+        check("Read of ~/.claude.json → allow", call("Read", file_path=claude_json), 0)
+        check(
+            "a write to ~/.claude.json is still refused",
+            call("Write", file_path=claude_json),
+            2,
+        )
+        check(
+            "listing ~/.local/bin → allow",
+            call("Bash", command="ls -la " + os.path.join(home, ".local", "bin")),
+            0,
+        )
+        check(
+            "`yq -i` on ~/.claude.json is a write → refused",
+            call("Bash", command="yq -i '.x = 1' " + claude_json),
+            2,
+        )
+        check(
+            "`sort -o` into ~/.local/bin is a write → refused",
+            call(
+                "Bash",
+                command="sort -o " + os.path.join(home, ".local", "bin", "claude") + " /dev/null",
+            ),
+            2,
+        )
+        check(
+            "a reader piped into a writer on ~/.claude.json → refused",
+            call("Bash", command=f"jq . {claude_json} | awk -i inplace 1 {claude_json}"),
+            2,
+        )
+        # --- fail open for reads, closed for writes (design D6) ---
         check(
             "malformed hook input → exit 0 with a note",
             evaluate({"tool_name": "Read"}, env(), root),
             0,
             "note",
+        )
+        check(
+            "malformed Edit (tool_input not an object) → exit 2",
+            evaluate({"tool_name": "Edit", "tool_input": "x"}, env(), root),
+            2,
+            "guard error",
+        )
+        check(
+            "malformed Read (tool_input not an object) → exit 0 with a note",
+            evaluate({"tool_name": "Read", "tool_input": "x"}, env(), root),
+            0,
+            "note",
+        )
+
+        def hook_with_broken_guard(stdin: str) -> tuple[int, str]:
+            """run_hook with evaluate() raising — the guard-error path."""
+            import io
+
+            def boom(*_a: object, **_k: object) -> tuple[int, str]:
+                raise RuntimeError("synthetic guard defect")
+
+            saved_eval, saved_in, saved_err = globals()["evaluate"], sys.stdin, sys.stderr
+            globals()["evaluate"], sys.stdin, sys.stderr = boom, io.StringIO(stdin), io.StringIO()
+            try:
+                code = run_hook()
+                return code, sys.stderr.getvalue()
+            finally:
+                globals()["evaluate"], sys.stdin, sys.stderr = saved_eval, saved_in, saved_err
+
+        check(
+            "guard error on an Edit → exit 2 (refused)",
+            hook_with_broken_guard(
+                json.dumps({"tool_name": "Edit", "tool_input": {"file_path": "x"}})
+            ),
+            2,
+            "guard error",
+        )
+        check(
+            "guard error on a Read → exit 0 with a note",
+            hook_with_broken_guard(
+                json.dumps({"tool_name": "Read", "tool_input": {"file_path": "x"}})
+            ),
+            0,
+            "allowing",
+        )
+        check(
+            "unparseable stdin → exit 0 with a note",
+            hook_with_broken_guard("{not json"),
+            0,
+            "could not parse",
         )
         check(
             "no CLAUDE_PROJECT_DIR, cwd outside any repo → cwd is the root",

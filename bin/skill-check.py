@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.9"
+# requires-python = ">=3.14"
 # dependencies = []
 # ///
 """skill-check.py — the thin-skill contract (claude-meta specs `alemax-skills`, `project-skill-authoring`).
@@ -19,6 +19,16 @@ Exit 1 ("REFUSE") — for a staged file, or every file with --strict — on:
       harness's own value and is accepted anywhere)
   F2  frontmatter missing `metadata.reviewed_model` or `metadata.reviewed` (YYYY-MM-DD) —
       the provenance that says which model the body was reviewed against, and when
+  F3  frontmatter outside the Agent Skills limits (platform.claude.com, "Skill authoring best
+      practices" § YAML frontmatter requirements): `name` over 64 characters, not lowercase
+      letters, digits and hyphens, or containing a reserved word (`anthropic`, `claude`);
+      `description` over 1,024 characters or containing an XML tag. A `<placeholder>` is an
+      XML tag to a validator — write `{placeholder}` in a description; the body may keep `<…>`
+  F4  a top-level frontmatter value that is a plain (unquoted) scalar containing `: ` or ending
+      in `:`, on its first line or a continuation line — strict YAML (PyYAML `safe_load`)
+      refuses it with "mapping values are not allowed here", and a parser that drops the whole
+      frontmatter on error loses `allowed-tools` and `context` with it. A ` # comment` after
+      the value is not part of it. Quote the value, or use a `>-` block scalar
   B1  a fenced block that is not single-line invocations: every non-comment line must start
       with one of uv · python3 · git · gh (or --allow <leader>) — no loops, no conditionals,
       no `&&`/`;`/`$( )`, no assignments; an untagged fence that looks like shell counts
@@ -43,7 +53,11 @@ A plugin skill has no stub by design.
 
 Everything else is a WARN and never fails the commit: `name` differing from the directory,
 a body over 120 lines, a fence with more than three invocations,
-`metadata.reviewed` older than the file's last commit (the body changed after its review), and:
+`metadata.reviewed` older than the file's last commit (the body changed after its review), a
+`description` that says what the skill does but not when to use it (no `when`/`whenever`, no
+sentence opening `Use`, `Run` or `Invoke`) — the model picks a skill from its description
+alone, so a trigger-less one leaves the choice to guesswork — or one whose trigger starts past
+the first 300 characters, where Claude Code's skill listing cuts the description, and:
 
   D1  DOUBLE LISTING — a command stub and a skill are the same capability, so the harness
       lists it twice and the listing is budgeted at ~1 % of the context window; on overflow
@@ -71,6 +85,21 @@ a command that delegates to a skipped skill still resolves (S1 sees every skill 
 --fix-dates stamps `metadata.reviewed: <today>` (and `reviewed_model` when missing) on every
 skill whose only refusals are F2 — never on a skill that also fails B1/L1, so a fat body is
 not stamped as reviewed. Reads the working tree, edits nothing else, opens no other file.
+
+This checker and `skill-craft` (claude-meta's `marketplace/skill-craft/`, spec `skill-craft`)
+read one platform guide, "Skill authoring best practices", two ways. This one enforces the
+repo's thin-wrapper contract and gates commits. skill-craft is the guide itself — one skill per
+practice, a `checker.py` for the deterministic checks, written criteria for the judgment ones —
+run by hand when a skill is being written or a finding here is in doubt. Where the two overlap
+they are one rule, copied: F3 is skill-craft's `frontmatter-name` + `frontmatter-description`,
+the trigger warning is its `description-trigger` — same limits, same regexes (equal on
+2026-10-05). The copy is deliberate: this file ships to projects and skill-craft stays outside
+alemax, so neither imports the other. The guide is Anthropic's and it moves; skill-craft follows
+it (`checker.py --check-source` reports when the guide's sections changed) and this file follows
+skill-craft — a refresh that changes a limit or the regex lands there first, then here. The body
+limit differs on purpose: 120 lines here, for a wrapper that says what to run; 500 there, the
+guide's own budget. skill-craft's practice skills are knowledge, invoke-only and read now and
+then, so they may run long — and this file walks only `.claude/`, never `marketplace/`.
 """
 
 from __future__ import annotations
@@ -101,8 +130,26 @@ PATH_RE = re.compile(
 STUB_REF_RE = re.compile(
     r"\.claude/skills/(?:[A-Za-z0-9_-]+/skills/)?([A-Za-z0-9_-]+)/SKILL\.md|`([A-Za-z0-9_-]+)` skill\b"
 )
+# Skills the Claude Code harness ships itself — a stub may delegate to one without a
+# body under .claude/skills/ (the `/security` stub wraps the built-in `security-review`).
+HARNESS_SKILLS = frozenset({"security-review", "code-review", "simplify", "init"})
 BODY_MAX_LINES = 120
 FENCE_MAX_INVOCATIONS = 3
+
+# F3 — the Agent Skills frontmatter limits, verbatim from the platform docs ("Skill authoring
+# best practices" § YAML frontmatter requirements). Not tunable: a skill over them is one a
+# validator may reject, whatever this repo thinks of it. The same values as skill-craft's
+# `checker.py` (NAME_MAX · NAME_RESERVED · DESC_MAX · XML_TAG_RE, and TRIGGER_RE for WHEN_RE
+# below); a guide refresh updates them there first, then here — see the header.
+NAME_RE = re.compile(r"^[a-z0-9-]{1,64}$")
+NAME_RESERVED = ("anthropic", "claude")
+DESC_MAX_CHARS = 1024
+XML_TAG_RE = re.compile(r"</?[A-Za-z][^<>]*>")
+# W — a trigger: where the description tells the model WHEN, not only WHAT.
+WHEN_RE = re.compile(r"\bwhen(ever)?\b|(^|[.;:—]\s*)(use|run|invoke)\b", re.IGNORECASE)
+# W — Claude Code's skill listing shows each description cut to its first 300 characters
+# (measured 2026-10-05: 299 plus an ellipsis); a trigger past the cut never reaches the model.
+LISTING_VISIBLE_CHARS = 300
 
 # D1/D2 — the stub-versus-skill pair.
 # 160 chars: the four `/opsx:*` stub descriptions on canonical run 54-83 chars, so a routing
@@ -200,7 +247,7 @@ def git(repo: Path, *args: str) -> str | None:
         done = subprocess.run(
             ["git", *args], cwd=str(repo), check=True, capture_output=True, text=True
         )
-    except (OSError, subprocess.CalledProcessError):
+    except OSError, subprocess.CalledProcessError:
         return None
     return done.stdout
 
@@ -223,6 +270,30 @@ def split_frontmatter(text: str) -> tuple[list[str] | None, str]:
     return None, text
 
 
+def plain_scalar_colons(lines: list[str]) -> list[str]:
+    """Top-level keys whose plain (unquoted, non-block) value YAML reads as a mapping (rule F4):
+    `: ` anywhere, or a trailing `:`, on the first line or an indented continuation line. A
+    ` #` ends the value — what follows is a comment."""
+    bad: list[str] = []
+    key: str | None = None  # the key whose plain scalar the next indented line continues
+    for line in lines:
+        m = re.match(r"^([A-Za-z0-9_-]+):(?:[ \t]+(.*))?$", line)
+        if m:
+            key, text = m.group(1), (m.group(2) or "").strip()
+            if not text or text[0] in "\"'>|[{&*!#":
+                key = None  # a nested mapping, a block, a quoted or a flow value
+                continue
+        elif key and line[:1] in " \t" and line.strip():
+            text = line.strip()
+        else:
+            key = None
+            continue
+        text = re.split(r"[ \t]#", text, maxsplit=1)[0].rstrip()
+        if (": " in text or text.endswith(":")) and key not in bad:
+            bad.append(key)
+    return bad
+
+
 def scalar(raw: str) -> str:
     raw = raw.strip()
     if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
@@ -233,17 +304,36 @@ def scalar(raw: str) -> str:
 def parse_frontmatter(lines: list[str]) -> dict[str, object]:
     fm: dict[str, object] = {}
     current: str | None = None
+    block: tuple[str, str, list[str]] | None = None  # (key, `>` or `|`, lines) of a block scalar
+
+    def close_block() -> None:
+        if block:
+            key, style, buf = block
+            text = "\n".join(buf).strip()
+            # Folded: a line break is a space; n blank lines are n line breaks.
+            fm[key] = (
+                re.sub(r"\n(\n*)", lambda m: m.group(1) or " ", text) if style == ">" else text
+            )
+
     for line in lines:
+        indent = len(line) - len(line.lstrip(" "))
+        if block and (indent > 0 or not line.strip()):
+            block[2].append(line.strip())
+            continue
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        indent = len(line) - len(line.lstrip(" "))
         if indent == 0:
+            close_block()
+            block = None
             current = None
             if ":" not in line:
                 continue
             key, tail = line.split(":", 1)
             key, tail = key.strip(), tail.strip()
-            if tail.startswith("{") and tail.endswith("}"):
+            header = tail.split(" #", 1)[0].strip()  # `description: >- # note` is still a block
+            if header[:1] in (">", "|") and header.rstrip("+-0123456789") in (">", "|"):
+                block = (key, header[0], [])
+            elif tail.startswith("{") and tail.endswith("}"):
                 inner: dict[str, str] = {}
                 for part in tail[1:-1].split(","):
                     if ":" in part:
@@ -258,6 +348,7 @@ def parse_frontmatter(lines: list[str]) -> dict[str, object]:
         elif current is not None and isinstance(fm.get(current), dict) and ":" in line:
             k, v = line.strip().split(":", 1)
             fm[current][k.strip()] = scalar(v)  # type: ignore[index]
+    close_block()
     return fm
 
 
@@ -571,9 +662,43 @@ def main(argv: list[str] | None = None) -> int:
         for key in ("name", "description", "context"):
             if not fm.get(key):
                 verdict(rel, True, f"F1: frontmatter lacks `{key}`")
+        for key in plain_scalar_colons(fm_lines):
+            verdict(rel, True, f"F4: `{key}` is a plain scalar containing ': ' — quote it")
         if fm.get("name") and fm["name"] != name:
             warnings.append(
                 f"{rel}: W: name `{fm['name']}` differs from the directory `{name}` (the directory is the command)"
+            )
+        fm_name = str(fm.get("name") or "")
+        if fm_name and not NAME_RE.match(fm_name):
+            verdict(
+                rel, True, f"F3: name `{fm_name}` is not 1-64 lowercase letters, digits and hyphens"
+            )
+        if any(word in fm_name for word in NAME_RESERVED):
+            verdict(
+                rel,
+                True,
+                f"F3: name `{fm_name}` contains a reserved word ({' · '.join(NAME_RESERVED)})",
+            )
+        desc = str(fm.get("description") or "")
+        if len(desc) > DESC_MAX_CHARS:
+            verdict(
+                rel, True, f"F3: description is {len(desc)} characters — over {DESC_MAX_CHARS:,}"
+            )
+        if tags := sorted(set(XML_TAG_RE.findall(desc))):
+            verdict(
+                rel,
+                True,
+                f"F3: description contains XML tag(s) {' '.join(tags)} — write a placeholder as `{{name}}`",
+            )
+        trigger = WHEN_RE.search(desc)
+        if desc and not trigger:
+            warnings.append(
+                f"{rel}: W: description says what the skill does but not when to use it — add a `Use when …` trigger"
+            )
+        elif trigger and trigger.start() >= LISTING_VISIBLE_CHARS - 1:
+            warnings.append(
+                f"{rel}: W: description's trigger starts at character {trigger.start()}, past the"
+                f" {LISTING_VISIBLE_CHARS} the skill listing shows — lead with it"
             )
         ctx = fm.get("context")
         if skill.family.startswith("alemax") and ctx and ctx not in (*ALEMAX_CONTEXTS, "fork"):
@@ -648,7 +773,7 @@ def main(argv: list[str] | None = None) -> int:
         text = path.read_text(encoding="utf-8", errors="replace")
         for m in STUB_REF_RE.finditer(text):
             named = m.group(1) or m.group(2)
-            if named and named not in existing_skills:
+            if named and named not in existing_skills and named not in HARNESS_SKILLS:
                 verdict(
                     rel,
                     True,

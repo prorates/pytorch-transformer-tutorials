@@ -1,23 +1,21 @@
 ---
 name: send-msg
-description: Send a brief to another Claude session on this machine by address — `/alemax:send-msg <drive> <repo>[@prod|@dev] <message…>` (e.g. `app01 sharepoint-scanner …`, `aiml01 i-m-getting-hired@dev …`, `upstream claude-meta …`). Resolves the address to a clone, finds the live session via `ListAgents` plus a one-line probe, sends the envelope, and logs the ledger row from the tool result. No live session → the brief is queued in the sender's OWN `.local/outbox/` for the peer to pull. Never writes into another repo.
+description: Use when the operator asks to brief or message another session on this Mac. Send a brief to another Claude session on this machine by address — `/alemax:send-msg {drive} {repo}[@prod|@dev] {message…}` (e.g. `app01 sharepoint-scanner …`, `aiml01 i-m-getting-hired@dev …`, `upstream claude-meta …`). Resolves the address to a clone, finds the live session via `ListAgents` plus a one-line probe, sends the envelope, and logs the ledger row from the tool result. No live session → the brief is queued in the sender's OWN `.local/outbox/` for the peer to pull. Never writes into another repo.
 license: MIT
-compatibility: Requires Claude Code with cross-session messaging (`ListAgents` + `SendMessage`; load `SendMessage` with `ToolSearch select:SendMessage` if deferred) and `uv` or `python3`. Honors `dot-local-scratch-convention` (`.local/` gitignored).
+compatibility: Requires Claude Code with cross-session messaging (`ListAgents` + `SendMessage`; load `SendMessage` with `ToolSearch select:SendMessage` if deferred) and `uv`. Honors `dot-local-scratch-convention` (`.local/` gitignored).
 context: either
 argument-hint: "<drive> <repo>[@prod|@dev] <message…>"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/send-msg/scripts/alemax_addr.py *) Bash(python3 .claude/skills/alemax/skills/send-msg/scripts/alemax_addr.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax msg *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax msg <subcommand>` — `self`, `resolve`, `cache`, `log`, `queue`, `mark`, `inbox`. The
-shipped entry point is `.claude/skills/alemax/skills/send-msg/scripts/alemax_addr.py`; run it from
-the repo root with `uv run --script`, or `python3`. `--help` documents every subcommand, and
+`alemax msg <subcommand>` — `self`, `resolve`, `cache`, `log`, `queue`, `mark`, `inbox`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax msg <subcommand> …`. `--help` documents every subcommand, and
 addressing rules, exit codes and refusals live in spec `session-messaging` and the module
 docstring — not here, because a body that restates them drifts from them.
 

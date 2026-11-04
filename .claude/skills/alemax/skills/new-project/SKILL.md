@@ -1,23 +1,21 @@
 ---
 name: new-project
-description: Bootstrap a new project in the operator's fork-managed claude-meta workflow — `scripts/newproj.py` validates the four required arguments and the three collisions (`projects.yaml`, `repos.yaml`, the destination directory), states the exact side effects, then runs `meta/bootstrap/init-project.sh`. Producer half of `/alemax:complete-init`: this creates a private GitHub repo, the local clone, the scaffolded stack and the manifest row; the new project's own session finishes it.
+description: "Use when the operator asks to start or bootstrap a new project. Bootstrap a new project in the operator's fork-managed claude-meta workflow — `alemax newproj` validates the four required arguments and the three collisions (`projects.yaml`, `repos.yaml`, the destination directory), states the exact side effects, then runs `meta/bootstrap/init-project.sh`. Producer half of `/alemax:complete-init`: this creates a private GitHub repo, the local clone, the scaffolded stack and the manifest row; the new project's own session finishes it."
 license: MIT
-compatibility: Requires bash, git, an authenticated gh, and `uv` or `python3`. Runs from a FORK claude-meta clone — the manifest row lands on your fork, not canonical.
+compatibility: Requires bash, git, an authenticated gh, and `uv`. Runs from a FORK claude-meta clone — the manifest row lands on your fork, not canonical.
 context: claude-meta-only
 argument-hint: "<name> <stack> <ghhandle> <description>"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/new-project/scripts/newproj.py *) Bash(python3 .claude/skills/alemax/skills/new-project/scripts/newproj.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax newproj *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax newproj` — `plan`, `preflight`, `run`, `validate`. The shipped entry point is
-`.claude/skills/alemax/skills/new-project/scripts/newproj.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax newproj` — `plan`, `preflight`, `run`, `validate`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax newproj <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `alemax-skills`
 and the module's own docstrings. This body carries what a session must decide, and what
@@ -25,9 +23,9 @@ to report — restating the code here is how the two drift.
 
 ## Steps
 
-1. **Gather only what cannot be inferred** — `name` (kebab-case), `stack`, `ghhandle`, and a
-   one-line `description`, in one pass. Do not quiz the operator on anything the cwd, the
-   manifests or the conversation already answer.
+1. **Gather only what cannot be inferred** — `name` (kebab-case), `stack` (repeatable, e.g.
+   `go` + `rust`, `python` + `java`), `ghhandle`, and a one-line `description`, in one pass. Do not quiz the
+   operator on anything the cwd, the manifests or the conversation already answer.
 2. **`preflight`, then `validate`.** Read the collisions as real answers, not as errors to retry
    past: a `projects.yaml` hit means the project already exists — the operator probably wants
    `/alemax:complete-init`, or nothing. A `repos.yaml` hit under a *different* handle means the

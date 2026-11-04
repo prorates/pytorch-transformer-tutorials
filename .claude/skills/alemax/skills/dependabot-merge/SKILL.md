@@ -1,23 +1,21 @@
 ---
 name: dependabot-merge
-description: Unblock and squash-merge one stale Dependabot PR (`mergeStateStatus` UNKNOWN — GitHub stops recomputing mergeability after about a week) — `@dependabot rebase`, a bounded poll, merge — from any repo with a GitHub remote. `scripts/dependabot_merge.py` drives `gh`, dry-run by default; before it reports any red check it finds the workflow run and says whether a step ever executed, so an exhausted Actions pool is never diagnosed as code. Use when the operator names a Dependabot PR they have already accepted.
+description: Use when the operator names a Dependabot PR they have already accepted. Unblock and squash-merge one stale Dependabot PR (`mergeStateStatus` UNKNOWN — GitHub stops recomputing mergeability after about a week) — `@dependabot rebase`, a bounded poll, merge — from any repo with a GitHub remote. `alemax dependabot` drives `gh`, dry-run by default; before it reports any red check it finds the workflow run and says whether a step ever executed, so an exhausted Actions pool is never diagnosed as code.
 license: MIT
-compatibility: Requires `gh` (authenticated), git, and `uv` or `python3`. Posts a comment and merges a PR only with `--apply`.
+compatibility: Requires `gh` (authenticated), git, and `uv`. Posts a comment and merges a PR only with `--apply`.
 context: either
 argument-hint: "<pr-number> [--apply] | --checks-only <pr-number>"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/dependabot-merge/scripts/dependabot_merge.py *) Bash(python3 .claude/skills/alemax/skills/dependabot-merge/scripts/dependabot_merge.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax dependabot *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax dependabot` — no subcommands — flags only. The shipped entry point is
-`.claude/skills/alemax/skills/dependabot-merge/scripts/dependabot_merge.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax dependabot` — no subcommands — flags only. Run it from the repo root as
+`uv run --directory plugins/alemax alemax dependabot <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `alemax-dependabot-skills`
 and the module's own docstrings. This body carries what a session must decide, and what
@@ -25,7 +23,7 @@ to report — restating the code here is how the two drift.
 
 ## Steps
 
-1. **Dry run:** `uv run --script .claude/skills/alemax/skills/dependabot-merge/scripts/dependabot_merge.py $0`
+1. **Dry run:** `uv run --directory plugins/alemax alemax dependabot $0`
    — one line per state, ending `would merge` / `would post @dependabot rebase` / `stopped: <reason>`.
 2. **Apply:** the same line with `--apply`. It polls the bot itself; do not poll by hand.
 3. **Report** the last line — `merged <sha>` or `stopped: <reason>`. On `stopped`, say what the

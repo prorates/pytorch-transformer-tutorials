@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.14"
 # dependencies = []
 # ///
 """reconcile-settings.py — fold the tracked settings floor into settings.local.json.
@@ -75,7 +75,7 @@ class FileError(Exception):
 def git(*args: str) -> str | None:
     try:
         done = subprocess.run(["git", *args], check=True, capture_output=True, text=True)
-    except (OSError, subprocess.CalledProcessError):
+    except OSError, subprocess.CalledProcessError:
         return None
     return done.stdout.strip()
 

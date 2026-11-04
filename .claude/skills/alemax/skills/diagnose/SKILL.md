@@ -1,23 +1,21 @@
 ---
 name: diagnose
-description: Scaffold a diagnosis directory with the standardized 10-section template, from any claude-meta-managed repo. `scripts/diagnose.py new` writes `<location>/diagnosis.md` from topic slug + scope + symptom + starting hypothesis; `list` shows the diagnoses this repo already has. The location is always asked — `openspec/diagnosis/YYYY-MM-DD-<slug>/` (committed, cross-project) or `.local/diagnosis/<slug>/` (operator-local) — with the smart default for the current repo highlighted. Use when a finding is bigger than a feedback row and warrants a multi-section investigation.
+description: Use when a finding is bigger than a feedback row and warrants a multi-section investigation. Scaffold a diagnosis directory with the standardized 10-section template, from any claude-meta-managed repo. `alemax diagnose new` writes `{location}/diagnosis.md` from topic slug + scope + symptom + starting hypothesis; `list` shows the diagnoses this repo already has. The location is always asked — `openspec/diagnosis/YYYY-MM-DD-{slug}/` (committed, cross-project) or `.local/diagnosis/{slug}/` (operator-local) — with the smart default for the current repo highlighted.
 license: MIT
-compatibility: Requires git and `uv` or `python3`. Honors `dot-local-scratch-convention` (spec `scaffolding-boundary`: `.local/` gitignored — the script refuses to write there otherwise).
+compatibility: "Requires git and `uv`. Honors `dot-local-scratch-convention` (spec `scaffolding-boundary`: `.local/` gitignored — the script refuses to write there otherwise)."
 context: either
 argument-hint: "[<topic-slug>] [--local | --committed]"
-allowed-tools: Bash(uv run --script .claude/skills/alemax/skills/diagnose/scripts/diagnose.py *) Bash(python3 .claude/skills/alemax/skills/diagnose/scripts/diagnose.py *)
+allowed-tools: Bash(uv run --directory plugins/alemax alemax diagnose *)
 metadata:
   author: alemax
-  version: "3.0"
   reviewed_model: claude-5
-  reviewed: 2026-09-07
+  reviewed: 2026-11-04
 ---
 
 ## Wraps
 
-`alemax diagnose` — `list`, `new`. The shipped entry point is
-`.claude/skills/alemax/skills/diagnose/scripts/diagnose.py`; run it from the repo root with `uv run --script`,
-or `python3` in its place. `--help` documents every flag.
+`alemax diagnose` — `list`, `new`. Run it from the repo root as
+`uv run --directory plugins/alemax alemax diagnose <subcommand> …`. `--help` documents every flag.
 
 Exit codes, branching and the reasoning behind each rule are in spec `alemax-skills`
 and the module's own docstrings. This body carries what a session must decide, and what
@@ -31,7 +29,7 @@ to report — restating the code here is how the two drift.
    answer is `--location openspec|local`; `--committed` / `--local` are the operator's spelling.
 2. **Ask only what you cannot infer** — topic slug (kebab-case, or the script refuses), one-line
    scope, the symptom (it becomes the H1), the starting hypothesis (skippable; the rest are not).
-3. **Scaffold:** `uv run --script .claude/skills/alemax/skills/diagnose/scripts/diagnose.py new --slug <slug> --symptom "<…>" --scope "<…>" --hypothesis "<…>" --location <openspec|local>`
+3. **Scaffold:** `uv run --directory plugins/alemax alemax diagnose new --slug <slug> --symptom "<…>" --scope "<…>" --hypothesis "<…>" --location <openspec|local>`
    — `--dry-run` prints the file instead of writing it. An existing directory is refused by
    name: confirm, then pick another slug or pass `--force` (it overwrites that directory's
    `diagnosis.md` and nothing else).
