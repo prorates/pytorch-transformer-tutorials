@@ -121,7 +121,14 @@ device and raises if that backend is absent). To move a model between machines, 
   confined to the dataset modules.
 - `# JEB:` comments throughout flag open correctness questions inherited from the
   source tutorials — some are real bugs, some are study notes.
-- Backend coverage differs on MPS; a few ops may fall back to CPU or error.
+- Backend coverage differs on MPS; a few ops may fall back to CPU or error. Note that
+  `F.scaled_dot_product_attention` is available but does not fuse as aggressively there:
+  model8's per-head dispatch cost fell from ~24 ms to ~15 ms per head-module on MPS,
+  against ~32 ms to ~6 ms on CUDA.
+- **model8 checkpoints predating the batched-attention rewrite will not load.** The
+  attention parameters moved from per-head `key`/`query`/`value` layers to one fused
+  `c_attn`, and the per-head `tril` causal-mask buffers left `state_dict` entirely
+  (`is_causal=True` replaces them). Retrain rather than trying to port weights.
 
 ## Where to make changes
 
